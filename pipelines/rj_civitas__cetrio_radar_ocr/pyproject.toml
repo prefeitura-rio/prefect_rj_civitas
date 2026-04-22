@@ -1,0 +1,11 @@
+[project]
+name = "rj_civitas__cetrio_radar_ocr"
+version = "0.1.0"
+description = "Pipeline cetrio_radar_ocr da CIVITAS"
+dependencies = [
+    "prefect_rj_civitas",
+    "requests>=2.32.0",
+]
+
+[tool.uv.sources]
+prefect_rj_civitas = { workspace = true }
