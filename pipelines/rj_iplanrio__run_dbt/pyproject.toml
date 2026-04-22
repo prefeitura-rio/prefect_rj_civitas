@@ -1,9 +1,9 @@
 [project]
-name = "rj_iplanrio__run_dbt"
+name = "rj_civitas__run_dbt"
 version = "0.1.0"
-description = "Pipeline run_dbt da secretaria iplanrio"
+description = "Pipeline run_dbt da CIVITAS Rio"
 dependencies = [
-    "prefect_rj_iplanrio",
+    "prefect_rj_civitas",
     "pip>=25.1.1",
     "gitpython>=3.1.44",
     "prefect-dbt>=0.7.5",
@@ -13,4 +13,4 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-prefect_rj_iplanrio = { workspace = true }
+prefect_rj_civitas = { workspace = true }

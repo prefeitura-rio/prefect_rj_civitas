@@ -66,7 +66,7 @@ def upload_catalog_to_bucket():
 
 
 @flow(log_prints=True)
-def rj_iplanrio__data_catalog():
+def rj_civitas__data_catalog():
     pull_secret_to_file()
     get_catalog()
     transform_catalog()

@@ -1,4 +1,4 @@
-DECLARE projetos ARRAY<STRING> DEFAULT ['rj-iplanrio'];
+DECLARE projetos ARRAY<STRING> DEFAULT ['rj-civitas'];
 DECLARE sql STRING;
 
 SET sql = (
@@ -38,7 +38,7 @@ SET sql = (
       projeto, schema_name
       ) AS sub_sql
     FROM UNNEST(projetos) AS projeto
-    JOIN `rj-iplanrio.INFORMATION_SCHEMA.SCHEMATA`
+    JOIN `rj-civitas.INFORMATION_SCHEMA.SCHEMATA`
     ON TRUE
   )
 );

@@ -359,7 +359,7 @@ def upload_dbt_artifacts_to_gcs(environment: str, gcs_buckets: GcsBucket) -> boo
 
 
 @flow(log_prints=True, flow_run_name="DBT {command} {target}")
-def rj_iplanrio__run_dbt(
+def rj_civitas__run_dbt(
     # Flow parameters
     send_discord_report: bool = False,
     # DBT parameters
@@ -368,7 +368,7 @@ def rj_iplanrio__run_dbt(
     exclude: str = "",
     flag: str = "",
     github_repo: str = None,
-    bigquery_project: str = "rj-iplanrio",
+    bigquery_project: str = "rj-civitas",
     target: str = "dev",
     # GCP parameters
     gcs_buckets: GcsBucket = None,

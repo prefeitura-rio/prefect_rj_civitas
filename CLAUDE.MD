@@ -1,14 +1,14 @@
-# Guia Completo para LLMs - Projeto Prefect RJ IplanRio
+# Guia Completo para LLMs - Projeto Prefect RJ CIVITAS
 
-Este documento consolida informações essenciais para LLMs trabalharem com o projeto Prefect RJ IplanRio, incluindo workflows de desenvolvimento e migração de Prefect 1.4 para 3.0.
+Este documento consolida informações essenciais para LLMs trabalharem com o projeto Prefect RJ CIVITAS, incluindo workflows de desenvolvimento e migração de Prefect 1.4 para 3.0.
 
 ## 📋 Visão Geral do Projeto
 
-O projeto Prefect RJ IplanRio é um sistema de pipelines de dados para a Prefeitura do Rio de Janeiro, utilizando Prefect 3.0 para orquestração de workflows. O projeto segue convenções específicas de nomenclatura e estrutura.
+O projeto Prefect RJ CIVITAS é um sistema de pipelines de dados para a CIVITAS RIo, utilizando Prefect 3.0 para orquestração de workflows. O projeto segue convenções específicas de nomenclatura e estrutura.
 
 ### Convenções de Nomenclatura
 - **Pipelines**: `rj_<secretaria>__<pipeline>`
-- **Exemplos**: `rj_crm__api_wetalkie`, `rj_smas__cadunico`, `rj_iplanrio__dados_mestres`
+- **Exemplos**: `rj_civitas__cetrio_radar_ocr`
 
 ## 🛠️ Workflow de Desenvolvimento
 
@@ -123,7 +123,7 @@ build:
       script: git rev-parse --short HEAD
   - prefect_docker.deployments.steps.build_docker_image:
       id: build-image
-      image_name: ghcr.io/prefeitura-rio/prefect_rj_iplanrio/deployments
+      image_name: ghcr.io/prefeitura-rio/prefect_rj_civitas/deployments
       tag: "rj_{{ cookiecutter.secretaria }}__{{ cookiecutter.pipeline }}-{% raw %}{{ get-commit-hash.stdout }}{% endraw %}"
 
 deployments:
@@ -169,4 +169,4 @@ deployments:
 
 ---
 
-**Nota**: Este guia deve ser consultado sempre que trabalhar com o projeto Prefect RJ IplanRio para garantir consistência e seguir as melhores práticas estabelecidas.
+**Nota**: Este guia deve ser consultado sempre que trabalhar com o projeto Prefect RJ CIVITAS para garantir consistência e seguir as melhores práticas estabelecidas.
