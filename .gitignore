@@ -32,3 +32,8 @@ venv.bak/
 
 # Ruff stuff:
 .ruff_cache/
+
+# developer files
+data/
+tmp/
+developer-eggs/
