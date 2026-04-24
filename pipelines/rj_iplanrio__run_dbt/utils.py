@@ -86,7 +86,7 @@ def send_message(title, message, flow_info: dict, file_path=None, username=None,
     header_content = f"""
 ## {title}
 > Prefect Environment: {flow_environment}
-> Flow Run: [{flow_name}](https://prefect.squirrel-regulus.ts.net/runs/flow-run/{flow_run_id})
+> Flow Run: [{flow_name}](https://prefect-civitas.squirrel-regulus.ts.net/runs/flow-run/{flow_run_id})
     """
     # Calculate max char count for message
     message_max_char_count = 2000 - len(header_content)
