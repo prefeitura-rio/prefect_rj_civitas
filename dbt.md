@@ -4,15 +4,15 @@
 
 O repositório utiliza o DBT (Data Build Tool) de duas formas principais nas pipelines do Prefect:
 
-1. **Pipeline dedicada de execução automática** (`rj_iplanrio__run_dbt`)
+1. **Pipeline dedicada de execução automática** (`rj_civitas__run_dbt`)
 2. **Materialização sob demanda** através da função `execute_dbt_task` em flows específicos
 
-## 1. Pipeline Dedicada: `rj_iplanrio__run_dbt`
+## 1. Pipeline Dedicada: `rj_civitas__run_dbt`
 
 ### Localização
-- **Flow principal**: `pipelines/rj_iplanrio__run_dbt/flow.py`
-- **Utilitários**: `pipelines/rj_iplanrio__run_dbt/utils.py`
-- **Configuração**: `pipelines/rj_iplanrio__run_dbt/prefect.yaml`
+- **Flow principal**: `pipelines/rj_civitas__run_dbt/flow.py`
+- **Utilitários**: `pipelines/rj_civitas__run_dbt/utils.py`
+- **Configuração**: `pipelines/rj_civitas__run_dbt/prefect.yaml`
 
 ### Funcionalidades Principais
 
@@ -25,10 +25,10 @@ O repositório utiliza o DBT (Data Build Tool) de duas formas principais nas pip
 #### 1.2 Gerenciamento de Artefatos
 - **Download**: Baixa artefatos do DBT do Google Cloud Storage para execução incremental
 - **Upload**: Envia artefatos gerados de volta para o GCS (apenas em produção)
-- **Localização**: Buckets configuráveis por ambiente (`prod`: `rj-iplanrio_dbt`, `dev`: `rj-iplanrio-dev_dbt`)
+- **Localização**: Buckets configuráveis por ambiente (`prod`: `rj-civitas_dbt`, `dev`: `rj-civitas-dev_dbt`)
 
 #### 1.3 Gestão de Repositório
-- Clona automaticamente o repositório de queries do GitHub: `https://github.com/prefeitura-rio/queries-rj-iplanrio.git`
+- Clona automaticamente o repositório de queries do GitHub: `https://github.com/prefeitura-rio/queries-rj-civitas.git`
 - Instala dependências DBT através do comando `deps`
 - Limpa e recria o diretório de trabalho a cada execução
 
@@ -146,7 +146,7 @@ Indicando que existia uma funcionalidade `task_run_dbt_model_task` na biblioteca
 ## 5. Limitações e Considerações
 
 ### 5.1 Dependências
-- Pipeline dedicada depende do repositório externo `queries-rj-iplanrio`
+- Pipeline dedicada depende do repositório externo `queries-rj-civitas`
 - Necessidade de credenciais configuradas corretamente
 - Dependência de buckets GCS específicos
 

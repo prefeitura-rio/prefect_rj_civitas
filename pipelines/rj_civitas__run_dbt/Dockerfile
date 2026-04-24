@@ -7,6 +7,6 @@ WORKDIR /opt/prefect/prefect_rj_civitas
 COPY ./pyproject.toml ./uv.lock /opt/prefect/prefect_rj_civitas/
 COPY ./src ./src/
 
-COPY ./pipelines/rj_{{ cookiecutter.secretaria }}__{{ cookiecutter.pipeline }} ./pipelines/rj_{{ cookiecutter.secretaria }}__{{ cookiecutter.pipeline }}/
+COPY ./pipelines/rj_civitas__run_dbt ./pipelines/rj_civitas__run_dbt/
 
-RUN uv sync --package rj_{{ cookiecutter.secretaria }}__{{ cookiecutter.pipeline }}
+RUN uv sync --package rj_civitas__run_dbt

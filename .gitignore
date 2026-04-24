@@ -1,5 +1,5 @@
 test.py
-prefect_rj_iplanrio.egg-info/
+prefect_rj_civitas.egg-info/
 # Cursor files
 # .cursor/
 
@@ -32,3 +32,8 @@ venv.bak/
 
 # Ruff stuff:
 .ruff_cache/
+
+# developer files
+data/
+tmp/
+developer-eggs/

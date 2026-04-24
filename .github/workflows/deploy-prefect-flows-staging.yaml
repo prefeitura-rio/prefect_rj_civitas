@@ -49,7 +49,7 @@ jobs:
         with:
           environment: staging
           pipelines_path: ./pipelines
-          prefect_api_url: https://prefect.squirrel-regulus.ts.net/api
+          prefect_api_url: https://prefect-civitas.squirrel-regulus.ts.net/api
           ts_tags: tag:prefect-cicd
           ts_oauth_client_id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           ts_oauth_secret: ${{ secrets.TS_OAUTH_SECRET }}

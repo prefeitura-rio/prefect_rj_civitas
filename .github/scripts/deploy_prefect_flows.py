@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # /// script
 # requires-python = ">=3.13"
 # dependencies = [
@@ -38,7 +39,7 @@ logging.basicConfig(
 )
 
 DOCKER_IMAGE_FORMAT_PARTS_COUNT = 2
-BASE_IMAGE = "ghcr.io/prefeitura-rio/prefect_rj_iplanrio:latest"
+BASE_IMAGE = "ghcr.io/prefeitura-rio/prefect_rj_civitas:latest"
 
 DeploymentFunc = Callable[[Path, str], Awaitable[tuple[Path, int]]]
 

@@ -7,6 +7,8 @@ WORKDIR /opt/prefect/prefect_rj_civitas
 COPY ./pyproject.toml ./uv.lock /opt/prefect/prefect_rj_civitas/
 COPY ./src ./src/
 
-COPY ./pipelines/rj_{{ cookiecutter.secretaria }}__{{ cookiecutter.pipeline }} ./pipelines/rj_{{ cookiecutter.secretaria }}__{{ cookiecutter.pipeline }}/
+COPY ./pipelines/rj_civitas__data_catalog ./pipelines/rj_civitas__data_catalog/
 
-RUN uv sync --package rj_{{ cookiecutter.secretaria }}__{{ cookiecutter.pipeline }}
+RUN apt update && apt install jq -y
+
+RUN uv sync --package rj_civitas__data_catalog

@@ -16,7 +16,7 @@ pipelines/
 ├── rj_sec__pipeline2/
 └── ...
 src/
-└── prefect_rj_iplanrio/
+└── prefect_rj_civitas/
     └── __init__.py
 Dockerfile
 pyproject.toml
@@ -42,14 +42,14 @@ Este repositório utiliza um modelo monorepo para gerenciar múltiplas pipelines
 
 - **`pyproject.toml` centralizado com uv workspaces**: o `pyproject.toml` na raiz do projeto gerencia as dependências Python de todas as pipelines utilizando [uv workspaces](https://docs.astral.sh/uv/concepts/projects/workspaces/).
   - Cada subdiretório em `pipelines/` representa um módulo Python independente, mas todos são importados automaticamente como membros do workspace.
-  - As pipelines declaram `prefect_rj_iplanrio` como dependência com `{ workspace = true }`, herdando automaticamente as dependências base (`iplanrio`, `prefect`, `pandas`, etc.).
+  - As pipelines declaram `prefect_rj_civitas` como dependência com `{ workspace = true }`, herdando automaticamente as dependências base (`iplanrio`, `prefect`, `pandas`, etc.).
   - Novas pipelines adicionadas à pasta `pipelines/` são automaticamente reconhecidas e integradas ao workspace, sem necessidade de configuração manual adicional.
 
-- **Código compartilhado**: o diretório `src/prefect_rj_iplanrio/` contém código Python compartilhado entre as pipelines.
+- **Código compartilhado**: o diretório `src/prefect_rj_civitas/` contém código Python compartilhado entre as pipelines.
   - Funções utilitárias, classes base, helpers e lógica comum podem ser adicionados neste pacote.
-  - Todas as pipelines que dependem de `prefect_rj_iplanrio` podem importar este código diretamente:
+  - Todas as pipelines que dependem de `prefect_rj_civitas` podem importar este código diretamente:
     ```python
-    from prefect_rj_iplanrio import minha_funcao_compartilhada
+    from prefect_rj_civitas import minha_funcao_compartilhada
     ```
   - Isso evita duplicação de código e facilita a manutenção de funcionalidades reutilizáveis.
 
@@ -143,18 +143,18 @@ O repositório utiliza GitHub Actions para automatizar todo o ciclo de vida das 
 
 ### Erro: `uv sync --package` falha com "package not found"
 
-**Causa**: O `pyproject.toml` da pipeline não declara `prefect_rj_iplanrio` como dependência com `workspace = true`.
+**Causa**: O `pyproject.toml` da pipeline não declara `prefect_rj_civitas` como dependência com `workspace = true`.
 
 **Solução**: Adicione ao `pyproject.toml` da pipeline:
 
 ```toml
 dependencies = [
-    "prefect_rj_iplanrio",
+    "prefect_rj_civitas",
     # ... outras dependências
 ]
 
 [tool.uv.sources]
-prefect_rj_iplanrio = { workspace = true }
+prefect_rj_civitas = { workspace = true }
 ```
 
 ### Erro: Docker build falha com "cx-oracle" ou "pkg_resources"
@@ -174,7 +174,7 @@ uv lock
 **Solução**: Verifique se o Dockerfile da pipeline contém:
 
 ```dockerfile
-COPY ./pyproject.toml ./uv.lock /opt/prefect/prefect_rj_iplanrio/
+COPY ./pyproject.toml ./uv.lock /opt/prefect/prefect_rj_civitas/
 COPY ./src ./src/
 COPY ./pipelines/<nome-da-pipeline> ./pipelines/<nome-da-pipeline>/
 RUN uv sync --package <nome-da-pipeline>
@@ -192,9 +192,9 @@ uv lock
 
 ### Erro: Import de código compartilhado não funciona
 
-**Causa**: O pacote `prefect_rj_iplanrio` não está sendo instalado corretamente.
+**Causa**: O pacote `prefect_rj_civitas` não está sendo instalado corretamente.
 
 **Solução**: Verifique se:
-1. O diretório `src/prefect_rj_iplanrio/` existe e contém `__init__.py`
-2. A pipeline declara `prefect_rj_iplanrio` como dependência com `workspace = true`
+1. O diretório `src/prefect_rj_civitas/` existe e contém `__init__.py`
+2. A pipeline declara `prefect_rj_civitas` como dependência com `workspace = true`
 3. O Dockerfile copia o diretório `src/`
