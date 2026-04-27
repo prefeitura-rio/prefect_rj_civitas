@@ -28,10 +28,6 @@ inputs:
     description: Extra arguments for tailscale up (see tailscale/github-action `args` input)
     required: false
     default: "--accept-dns=true"
-  ts_ping_host:
-    description: Tailscale hostname to ping after connecting (blocks until reachable, up to 3 minutes)
-    required: false
-    default: ""
   gh_token:
     description: GitHub token
     required: true
@@ -69,7 +65,20 @@ runs:
         oauth-secret: ${{ inputs.ts_oauth_secret }}
         tags: ${{ inputs.ts_tags }}
         args: ${{ inputs.ts_tailscale_up_args }}
-        ping: ${{ inputs.ts_ping_host }}
+
+    - name: Verify Tailscale DNS
+      shell: bash
+      run: |
+        for i in $(seq 1 10); do
+          if curl -sf --max-time 5 "${{ inputs.prefect_api_url }}/health" > /dev/null 2>&1; then
+            echo "Prefect API reachable"
+            exit 0
+          fi
+          echo "Attempt $i: Prefect API not reachable, retrying in 10s..."
+          sleep 10
+        done
+        echo "Prefect API unreachable after retries"
+        exit 1
 
     - name: Log in to GitHub container registry
       uses: docker/login-action@v3

@@ -57,7 +57,6 @@ jobs:
           ts_tags: tag:prefect
           ts_oauth_client_id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           ts_oauth_secret: ${{ secrets.TS_OAUTH_SECRET }}
-          ts_ping_host: prefect-civitas.squirrel-regulus.ts.net
           gh_token: ${{ secrets.GH_TOKEN }}
           force_deploy: ${{ github.event.inputs.force_deploy == 'true' && '1' || '0' }}
           debug: ${{ github.event.inputs.debug }}
