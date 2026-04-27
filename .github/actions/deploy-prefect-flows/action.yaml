@@ -27,7 +27,7 @@ inputs:
   ts_tailscale_up_args:
     description: Extra arguments for tailscale up (see tailscale/github-action `args` input)
     required: false
-    default: "--accept-dns=true"
+    default: "--accept-dns=true --accept-routes=true"
   gh_token:
     description: GitHub token
     required: true
@@ -79,7 +79,7 @@ runs:
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version-file: pyproject.toml
+        python-version-file: .python-version
 
     - name: Deploy Prefect flows
       shell: bash
