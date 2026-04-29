@@ -31,7 +31,7 @@ def get_cetrio_radar_api_credentials(secret_path: str = "/cetrio_radar") -> dict
 
 
 @task
-def extract_radar_data(secrets: dict, filename: str = "radar_data.csv") -> Path:
+def extract_radar_data(filename: str = "radar_data.csv") -> Path:
     """
     Extracts radar data from CETRIO API and saves it to a local CSV file.
     """
@@ -39,13 +39,8 @@ def extract_radar_data(secrets: dict, filename: str = "radar_data.csv") -> Path:
     path.mkdir(parents=True, exist_ok=True)
     filepath = path / filename
 
-    url = secrets.get("URL")
-    token = secrets.get("TOKEN")
-
-    if not url:
-        raise ValueError("Radar API URL not found in secrets")
-    if not token:
-        raise ValueError("Radar API token not found in secrets")
+    url = getenv_or_action("CETRIO_RADAR__URL")
+    token = getenv_or_action("CETRIO_RADAR__TOKEN")
 
     log(f"Starting download from URL: {url}")
     headers = {"Authorization": f"Bearer {token}"}

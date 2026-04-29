@@ -33,7 +33,7 @@ deployments:
       job_variables:
         image: "{{ build-image.image_name }}:{{ build-image.tag }}"
         command: uv run --package rj_civitas__cetrio_radar_ocr -- prefect flow-run execute
-        secretName: prefect-jobs-secrets
+        secretName: prefect-jobs-secrets-staging
         image_pull_policy: Always
   - name: rj-civitas--cetrio_radar_ocr--prod
     version: "{{ get-commit-hash.stdout }}"
@@ -56,6 +56,8 @@ deployments:
         dataset_id: cerco_digital
         table_id: radar
         dump_mode: overwrite
-        infisical_secret_path: /cetrio_radar
         filename: radar_data.csv
         environment: prod
+        required_secrets:
+          - CETRIO_RADAR__URL
+          - CETRIO_RADAR__TOKEN
