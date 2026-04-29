@@ -37,3 +37,4 @@ venv.bak/
 data/
 tmp/
 developer-eggs/
+*.local.yaml
