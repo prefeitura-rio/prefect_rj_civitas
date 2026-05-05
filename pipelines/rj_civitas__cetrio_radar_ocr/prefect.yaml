@@ -49,7 +49,7 @@ deployments:
 
     schedules:
     - interval: 86400
-      anchor_date: "2026-04-14T00:00:00"
+      anchor_date: "2026-04-14T00:00:00-03:00"
       timezone: America/Sao_Paulo
       slug: cetrio_radar_daily
       parameters:
