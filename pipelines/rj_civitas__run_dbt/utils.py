@@ -35,12 +35,12 @@ async def send_discord_webhook(
     """
     # Select webhook URL based on destination
     if destination == "notifications":
-        webhook_url = os.getenv("DBT-RUN__DISCORD_WEBHOOK_URL_NOTIFICATIONS")
+        webhook_url = os.getenv("DBT_RUN__DISCORD_WEBHOOK_URL_NOTIFICATIONS")
     elif destination == "incidentes":
-        webhook_url = os.getenv("DBT-RUN__DISCORD_WEBHOOK_URL_INCIDENTES")
+        webhook_url = os.getenv("DBT_RUN__DISCORD_WEBHOOK_URL_INCIDENTES")
     else:
         # Default to notifications if destination is not recognized
-        webhook_url = os.getenv("DBT-RUN__DISCORD_WEBHOOK_URL_NOTIFICATIONS")
+        webhook_url = os.getenv("DBT_RUN__DISCORD_WEBHOOK_URL_NOTIFICATIONS")
 
     if len(text_content) > 2000:
         raise ValueError(f"Message content is too long: {len(text_content)} > 2000 characters.")

@@ -34,7 +34,9 @@ venv.bak/
 .ruff_cache/
 
 # developer files
+dbt_repository/
 data/
 tmp/
 developer-eggs/
 *.local.yaml
+dbt_log.txt
