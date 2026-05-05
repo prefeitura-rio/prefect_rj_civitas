@@ -329,7 +329,6 @@ def create_dbt_report(
         message = (
             f"{param_report}\n{general_report}" if include_report else param_report
         )
-        log(f"Message: {message}", level="info") # TODO: remove
         send_message(
             title=f"{emoji} [{bigquery_project}] - Execução `dbt {command}` finalizada {complement}",
             message=message,
