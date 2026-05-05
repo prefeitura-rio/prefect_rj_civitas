@@ -1,0 +1,85 @@
+name: rj_civitas__disque_denuncia
+prefect-version: 3.4.3
+
+build:
+  - prefect.deployments.steps.run_shell_script:
+      id: get-commit-hash
+      script: git rev-parse --short HEAD
+      stream_output: false
+  - prefect_docker.deployments.steps.build_docker_image:
+      id: build-image
+      requires: prefect-docker>=0.6.5
+      image_name: ghcr.io/prefeitura-rio/prefect_rj_civitas/deployments
+      tag: "rj_civitas__disque_denuncia-{{ get-commit-hash.stdout }}"
+      dockerfile: pipelines/rj_civitas__disque_denuncia/Dockerfile
+
+push:
+  - prefect_docker.deployments.steps.push_docker_image:
+      requires: prefect-docker>=0.6.5
+      image_name: "{{ build-image.image_name }}"
+      tag: "{{ build-image.tag }}"
+
+pull:
+  - prefect.deployments.steps.set_working_directory:
+      directory: /opt/prefect/prefect_rj_civitas
+
+deployments:
+  - name: rj-civitas--disque_denuncia--staging
+    version: "{{ build-image.tag }}"
+    entrypoint: pipelines/rj_civitas__disque_denuncia/flow.py:rj_civitas__disque_denuncia
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables:
+        image: "{{ build-image.image_name }}:{{ build-image.tag }}"
+        command: uv run --package rj_civitas__disque_denuncia -- prefect flow-run execute
+        secretName: prefect-jobs-secrets-staging
+        image_pull_policy: Always
+  - name: rj-civitas--disque_denuncia--prod
+    version: "{{ get-commit-hash.stdout }}"
+    entrypoint: pipelines/rj_civitas__disque_denuncia/flow.py:rj_civitas__disque_denuncia
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables:
+        image: "{{ build-image.image_name }}:{{ build-image.tag }}"
+        command: uv run --package rj_civitas__disque_denuncia -- prefect flow-run execute
+        secretName: prefect-jobs-secrets
+        image_pull_policy: Always
+
+    schedules:
+      - interval: 60
+        anchor_date: "2021-11-23T14:00:00"
+        timezone: America/Sao_Paulo
+        slug: disque_denuncia_minutely
+        parameters:
+          project_id: rj-civitas
+          dataset_id: disque_denuncia
+          table_id: denuncias
+          start_date: "2021-01-01"
+          tipo_difusao: interesse
+          loop_limiter: false
+          dump_mode: append
+          biglake_table: true
+          mod: 100
+          materialize_after_dump: true
+          materialize_reports_dd_after_dump: true
+          georeference_reports: true
+          mode: prod
+          id_column_name: id_denuncia
+          address_columns:
+            - tipo_logradouro
+            - logradouro
+            - numero_logradouro
+            - bairro_logradouro
+            - cep_logradouro
+            - municipio
+            - estado
+          lat_lon_columns:
+            latitude: latitude
+            longitude: longitude
+          timestamp_creation_column_name: timestamp_insercao
+          date_column_name_geocoding: data_denuncia
+          required_secrets:
+            - DISQUE_DENUNCIA__URL
+            - GOOGLE_MAPS_API_KEY
