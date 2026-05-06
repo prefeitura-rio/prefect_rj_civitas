@@ -11,6 +11,7 @@ from typing import Optional, TypedDict
 import git
 from iplanrio.pipelines_utils.env import inject_bd_credentials_task
 from iplanrio.pipelines_utils.logging import log
+from iplanrio.pipelines_utils.prefect import rename_current_flow_run_task
 from prefect import flow, runtime, task
 from prefect.states import Failed
 from prefect_dbt import PrefectDbtRunner
@@ -360,18 +361,19 @@ def upload_dbt_artifacts_to_gcs(environment: str, gcs_buckets: GcsBucket) -> boo
 
 @flow(log_prints=True, flow_run_name="DBT {command} {target}")
 def rj_civitas__run_dbt(
+    # GCP parameters
+    gcs_buckets: GcsBucket,
+    # DBT parameters
+    github_repo: str,
+    command: str,
+    bigquery_project: str,
+    select: str | None = None,
+    exclude: str | None = None,
+    flag: str | None = None,
+    target: str = "dev",
     # Flow parameters
     send_discord_report: bool = False,
-    # DBT parameters
-    command: str = "test",
-    select: str = "",
-    exclude: str = "",
-    flag: str = "",
-    github_repo: str = None,
-    bigquery_project: str = "rj-civitas",
-    target: str = "dev",
-    # GCP parameters
-    gcs_buckets: GcsBucket = None,
+    flow_run_name: str | None = None,
 ) -> None:
     """
     Main DBT Transform Flow migrated from Prefect 1.4 to 3.0
@@ -386,7 +388,9 @@ def rj_civitas__run_dbt(
         bigquery_project (str): BigQuery project name
         target (str): DBT target environment
         gcs_buckets (GcsBucket): GCS bucket configuration
+        flow_run_name (str): Flow run name
     """
+    rename_current_flow_run_task(new_name=flow_run_name or f"DBT_{command}_{target}")
 
     # Validate required parameters
     if not github_repo:
