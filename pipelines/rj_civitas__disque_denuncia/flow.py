@@ -112,14 +112,13 @@ def rj_civitas__disque_denuncia(
         log(f"Materialize after dump deployment run: {materialize_after_dump_run.id}", level="info")
 
     if georeference_reports:
-        update_missing_coordinates_in_bigquery.submit(
+        update_missing_coordinates_in_bigquery(
             project_id=project_id,
             dataset_id=dataset_id,
             table_id=table_id,
             id_column_name=id_column_name,
             address_columns_names=address_columns,
             lat_lon_columns_names=lat_lon_columns,
-            mode=mode,
             date_execution=date_execution,
             start_date=start_date_geocoding,
             date_column_name=date_column_name_geocoding,
