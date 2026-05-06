@@ -59,10 +59,11 @@ def rj_civitas__disque_denuncia(
     gcs_buckets: dict[str, str] | None = None,
 ) -> Any:
 
+    rename_current_flow_run_task(new_name=f"ELT_{dataset_id}_{table_id}")
+
     if skip := skip_if_already_running():
         return skip
 
-    rename_current_flow_run_task(new_name=f"ELT_{dataset_id}_{table_id}")
     verify_secrets_task(secrets=required_secrets)
     inject_bd_credentials_task(environment="prod")
 
