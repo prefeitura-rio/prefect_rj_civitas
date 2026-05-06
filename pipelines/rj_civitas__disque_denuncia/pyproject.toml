@@ -1,0 +1,17 @@
+[project]
+name = "rj_civitas__disque_denuncia"
+version = "0.1.0"
+description = "Pipeline disque_denuncia da secretaria civitas"
+dependencies = [
+    "prefect_rj_civitas",
+    "basedosdados[upload]>=2.0.0",
+    "google-cloud-bigquery>=3.0.0",
+    "googlemaps>=4.10.0",
+    "pandas>=2.2.0",
+    "pytz",
+    "requests>=2.31.0",
+    "xmltodict>=0.13.0",
+]
+
+[tool.uv.sources]
+prefect_rj_civitas = { workspace = true }
