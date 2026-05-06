@@ -6,6 +6,8 @@ Migrated DBT Transform Flow from Prefect 1.4 to 3.0.
 
 import os
 import shutil
+import shlex
+from pathlib import Path
 from typing import Optional, TypedDict
 
 import git
@@ -15,6 +17,7 @@ from iplanrio.pipelines_utils.prefect import rename_current_flow_run_task
 from prefect import flow, runtime, task
 from prefect.states import Failed
 from prefect_dbt import PrefectDbtRunner
+from prefect_dbt.core.settings import PrefectDbtSettings
 from utils import (
     Summarizer,
     download_from_cloud_storage,
@@ -28,6 +31,54 @@ from utils import (
 class GcsBucket(TypedDict):
     prod: str
     dev: str
+
+
+def _dbt_runner(project_dir: str) -> PrefectDbtRunner:
+    # resolve_profiles_yml() reads PrefectDbtSettings.profiles_dir (not invoke kwargs).
+    root = Path(project_dir).resolve()
+    return PrefectDbtRunner(
+        raise_on_failure=False,
+        settings=PrefectDbtSettings(project_dir=root, profiles_dir=root),
+    )
+
+
+def _invoke_dbt(project_dir: str, command_args: list[str]):
+    # dbt Flags() parses invoked_subcommand via sys.argv (worker), not programmatic argv → defaults to ~/.dbt unless DBT_* is set.
+    root = Path(project_dir).resolve()
+    keys = ("DBT_PROFILES_DIR", "DBT_PROJECT_DIR")
+    saved = {k: os.environ.get(k) for k in keys}
+    try:
+        os.environ["DBT_PROFILES_DIR"] = str(root)
+        os.environ["DBT_PROJECT_DIR"] = str(root)
+        return _dbt_runner(project_dir).invoke(command_args)
+    finally:
+        for k in keys:
+            if saved[k] is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = saved[k]
+
+
+def _dbt_project_root_flags(project_dir: str) -> tuple[Path, list[str]]:
+    root = Path(project_dir).resolve()
+    return root, ["--project-dir", str(root), "--profiles-dir", str(root)]
+
+
+def _extra_dbt_cli_tokens(flag: object) -> list[str]:
+    """Turn flow `flag` into argv tokens; drop stray booleans / YAML noise."""
+    if flag is None or flag is False:
+        return []
+    if flag is True:
+        return []
+    text = str(flag).strip()
+    if not text:
+        return []
+    if text.lower() in ("true", "false", "none"):
+        return []
+    try:
+        return shlex.split(text)
+    except ValueError:
+        return [text]
 
 
 @task
@@ -96,6 +147,7 @@ def execute_dbt(
     exclude: str = "",
     state: str = "",
     flag: str = "",
+    project_dir: str = "dbt_repository",
 ):
     """
     Executes a dbt command using PrefectDbtRunner from prefect-dbt.
@@ -107,16 +159,19 @@ def execute_dbt(
         exclude (str): DBT exclude argument for filtering models
         state (str): DBT state argument for incremental processing
         flag (str): Additional DBT flags
+        project_dir (str): DBT project directory path
 
     Returns:
         PrefectDbtResult: Result of the DBT command execution
     """
 
+    root, proj_flags = _dbt_project_root_flags(project_dir)
+
     # Build the command arguments
     if command == "source freshness":
-        command_args = ["source", "freshness"]
+        command_args = ["source", "freshness", *proj_flags]
     else:
-        command_args = [command]
+        command_args = [command, *proj_flags]
 
     # Add common arguments for most DBT commands
     if command in ("build", "run", "test", "source freshness", "seed", "snapshot"):
@@ -128,22 +183,16 @@ def execute_dbt(
             command_args.extend(["--exclude", exclude])
         if state:
             command_args.extend(["--state", state])
-        if flag:
-            command_args.extend([flag])
+        command_args.extend(_extra_dbt_cli_tokens(flag))
     elif command == "retry":
-        command_args = ["retry"]
+        command_args = ["retry", *proj_flags]
         command_args.extend(["--state", state, "--target-path", state])
 
     log(f"Executing dbt command: {' '.join(command_args)}", level="info")
+    log(f"dbt project root: {root} (profiles.yml exists: {(root / 'profiles.yml').exists()})", level="info")
 
-    # Initialize PrefectDbtRunner
-    runner = PrefectDbtRunner(
-        raise_on_failure=False  # Allow the flow to handle failures gracefully
-    )
-
-    # Execute the dbt command with the constructed arguments
     try:
-        running_result = runner.invoke(command_args)
+        running_result = _invoke_dbt(project_dir, command_args)
         log(
             f"DBT command completed with success: {running_result.success}",
             level="info",
@@ -156,22 +205,25 @@ def execute_dbt(
 
 
 @task
-def install_dbt_dependencies():
+def install_dbt_dependencies(project_dir: str):
     """
     Installs DBT dependencies using the 'deps' command.
     This task is specifically designed to install packages defined in packages.yml.
+
+    Args:
+        project_dir (str): The path to the dbt project directory. Defaults to "dbt_repository".
+
+    Returns:
+        dbtRunnerResult: The result of the dbt dependencies installation.
     """
+    if not project_dir:
+        raise ValueError("project_dir is required")
 
     log("Installing DBT dependencies...", level="info")
 
-    # Initialize PrefectDbtRunner
-    runner = PrefectDbtRunner(
-        raise_on_failure=False  # Allow the flow to handle failures gracefully
-    )
-
-    # Execute the dbt deps command
+    _, proj_flags = _dbt_project_root_flags(project_dir)
     try:
-        deps_result = runner.invoke(["deps"])
+        deps_result = _invoke_dbt(project_dir, ["deps", *proj_flags])
         log("✅ DBT dependencies installed successfully", level="info")
         return deps_result
     except Exception as e:
@@ -278,7 +330,6 @@ def create_dbt_report(
         message = (
             f"{param_report}\n{general_report}" if include_report else param_report
         )
-
         send_message(
             title=f"{emoji} [{bigquery_project}] - Execução `dbt {command}` finalizada {complement}",
             message=message,
@@ -416,8 +467,10 @@ def rj_civitas__run_dbt(
         environment=target, gcs_buckets=gcs_buckets
     )
 
-    # Install dbt packages
-    install_dbt_packages = install_dbt_dependencies()
+    # Install dbt packages (submit → future for wait_for ordering vs execute_dbt)
+    deps_future = install_dbt_dependencies.submit(
+        project_dir=download_repository_task
+    )
 
     # Execute DBT command
     running_results = execute_dbt(
@@ -427,6 +480,8 @@ def rj_civitas__run_dbt(
         exclude=exclude,
         flag=flag,
         state=download_dbt_artifacts_task,
+        project_dir=download_repository_task,
+        wait_for=[deps_future],
     )
 
     # Create summary report
