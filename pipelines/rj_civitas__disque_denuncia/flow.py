@@ -9,15 +9,14 @@ Migrado de pipelines_rj_civitas Prefect 1.4 (disque_denuncia/extract/flows.py):
 """
 
 from pathlib import Path
-from typing import Any, Literal, Optional
-
+from typing import Any, Literal
 from iplanrio.pipelines_utils.bd import create_table_and_upload_to_gcs_task
-from iplanrio.pipelines_utils.dbt import execute_dbt_task
 from iplanrio.pipelines_utils.env import inject_bd_credentials_task
-from iplanrio.pipelines_utils.prefect import rename_current_flow_run_task
+from iplanrio.pipelines_utils.prefect import log, rename_current_flow_run_task
 from prefect import flow
+from prefect.deployments import run_deployment
 from prefect.states import Completed
-from prefect_rj_civitas import verify_secrets_task
+from prefect_rj_civitas import run_deployment_task, verify_secrets_task, config
 from pipelines.rj_civitas__disque_denuncia.tasks import (
     get_reports_from_start_date,
     loop_transform_report_data,
@@ -25,7 +24,7 @@ from pipelines.rj_civitas__disque_denuncia.tasks import (
     update_missing_coordinates_in_bigquery,
 )
 
-DBT_GIT_REPOSITORY = "https://github.com/prefeitura-rio/queries-rj-civitas.git"
+DBT_GIT_REPOSITORY = "https://github.com/prefeitura-rio/pipelines_rj_civitas.git"
 RAW_DIR = Path("/tmp/pipelines/disque_denuncia/data/raw")
 PARTITION_DIR = Path("/tmp/pipelines/disque_denuncia/data/partition_directory")
 
@@ -44,7 +43,7 @@ def rj_civitas__disque_denuncia(
     materialize_after_dump: bool,
     materialize_reports_dd_after_dump: bool,
     georeference_reports: bool,
-    mode: Literal["prod", "staging"],
+    mode: Literal["dev", "prod", "staging"],
     address_columns: list[str],
     lat_lon_columns: dict[str, str],
     id_column_name: str,
@@ -52,6 +51,7 @@ def rj_civitas__disque_denuncia(
     start_date_geocoding: str | None = None,
     date_column_name_geocoding: str | None = None,
     required_secrets: tuple[str, ...] | None = None,
+    gcs_buckets: dict[str, str] | None = None,
 ) -> Any:
     rename_current_flow_run_task(new_name=f"ELT_{dataset_id}_{table_id}")
     verify_secrets_task(secrets=required_secrets)
@@ -91,31 +91,37 @@ def rj_civitas__disque_denuncia(
     )
 
     if materialize_after_dump:
-        execute_dbt_task(
-            command="build",
-            target="prod",
-            select=table_id,
-            git_repository_path=DBT_GIT_REPOSITORY,
+        dbt_select = "+reports_disque_denuncia" if materialize_reports_dd_after_dump else f"{dataset_id}.{table_id}"
+        materialize_after_dump_parameters: dict[str, Any] = {
+            "command": "build",
+            "select": dbt_select,
+            "send_discord_report": True,
+            "github_repo": DBT_GIT_REPOSITORY,
+            "bigquery_project": project_id,
+            "target": "dev",
+            "gcs_buckets": gcs_buckets,
+        }
+
+        materialize_after_dump_future = run_deployment_task.submit(
+            name=config.run_dbt_deployment_name + "--" + mode,
+            parameters=materialize_after_dump_parameters,
+            timeout=None,
+            as_subflow=False,
         )
-        if materialize_reports_dd_after_dump:
-            execute_dbt_task(
-                command="build",
-                target="prod",
-                select="reports_disque_denuncia",
-                git_repository_path=DBT_GIT_REPOSITORY,
-            )
+        materialize_after_dump_run = materialize_after_dump_future.result()
+        log(f"Materialize after dump deployment run: {materialize_after_dump_run.id}", level="info")
 
     if georeference_reports:
-        update_missing_coordinates_in_bigquery(
+        update_missing_coordinates_in_bigquery.submit(
             project_id=project_id,
             dataset_id=dataset_id,
             table_id=table_id,
             id_column_name=id_column_name,
             address_columns_names=address_columns,
             lat_lon_columns_names=lat_lon_columns,
-            mode=mode if mode in ("prod", "staging") else "prod",
+            mode=mode,
             date_execution=date_execution,
             start_date=start_date_geocoding,
             date_column_name=date_column_name_geocoding,
-            timestamp_creation_column_name=timestamp_creation_column_name,
+            timestamp_creation_column_name=timestamp_creation_column_name
         )

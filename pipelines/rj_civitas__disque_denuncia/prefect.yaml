@@ -49,7 +49,7 @@ deployments:
 
     schedules:
       - interval: 60
-        anchor_date: "2021-11-23T14:00:00"
+        anchor_date: "2021-11-23T14:00:00-03:00"
         timezone: America/Sao_Paulo
         slug: disque_denuncia_minutely
         parameters:
@@ -79,7 +79,11 @@ deployments:
             latitude: latitude
             longitude: longitude
           timestamp_creation_column_name: timestamp_insercao
+          start_date_geocoding: "2021-01-01"
           date_column_name_geocoding: data_denuncia
           required_secrets:
             - DISQUE_DENUNCIA__URL
             - GOOGLE_MAPS_API_KEY
+          gcs_buckets:
+            prod: "rj-civitas_dbt"
+            dev: "rj-civitas-dev_dbt"

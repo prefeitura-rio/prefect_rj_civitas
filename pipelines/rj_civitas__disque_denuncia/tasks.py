@@ -209,7 +209,7 @@ def get_reports_from_start_date(
     table_id: str = None,
     loop_limiter: bool = False,
     mod: int = 100,
-    mode: str = "prod",
+    mode: Literal["dev", "prod", "staging"] = "prod",
 ) -> Dict[str, List[str]]:
     """
     Retrieves and processes reports from a start date until there are no more reports,
@@ -224,6 +224,7 @@ def get_reports_from_start_date(
         loop_limiter (int): Limits the loop iterations to 5 iterations.
             default is None, indicating that the loop will continue until the last date with data.
         mod (int): Only logs a message if the index is a multiple of mod. Default is 100.
+        mode (Literal["dev", "prod", "staging"], optional): Execution mode. Defaults to "prod".
 
     Returns:
         Dict[str, List[str]]: A dictionary containing a list of XML file paths and capture
@@ -243,7 +244,7 @@ def get_reports_from_start_date(
     last_page = False
     xml_file_path_list = []
     capture_status_list = []
-    bq_mode: str = mode if mode in ("prod", "staging") else "prod"
+    bq_mode: str = mode if mode in ("prod", "staging") else "staging"
     log(msg=f"BigQuery / GCS project mode: {bq_mode}", level="info")
     project_id = get_project_id(mode=bq_mode)
     storage_obj = bd.Storage(dataset_id=dataset_id, table_id=table_id)
@@ -772,7 +773,7 @@ def update_missing_coordinates_in_bigquery(
     lat_lon_columns_names: dict[str, str],
     api_key: str | None = None,
     region: str = "br",
-    mode: Literal["prod", "staging"] = "staging",
+    mode: Literal["dev", "prod", "staging"] = "prod",
     date_execution: str = None,
     start_date: str = None,
     date_column_name: str = None,
@@ -794,7 +795,7 @@ def update_missing_coordinates_in_bigquery(
             to their respective column names.
         api_key (str): Google Maps API key for geocoding.
         region (str, optional): Region code for geocoding. Defaults to "br".
-        mode (Literal["prod", "staging"], optional): Execution mode. Defaults to "staging".
+        mode (Literal["dev", "prod", "staging"], optional): Execution mode. Defaults to "staging".
         start_date (str, optional): Filter records from this date. Defaults to None.
         date_column_name (str, optional): Name of date column for filtering. Defaults to None.
         timestamp_creation_column_name (str, optional): Name of timestamp creation column.
@@ -808,7 +809,7 @@ def update_missing_coordinates_in_bigquery(
         Exception: If geocoding fails or BigQuery update operation fails.
     """
     # Adjust dataset for staging mode
-    dataset_id += "_staging" if mode == "staging" else ""
+    dataset_id += "_staging" if mode != "prod" else ""
 
     if api_key is None:
         api_key = getenv_or_action("GOOGLE_MAPS_API_KEY")
