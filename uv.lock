@@ -13,6 +13,7 @@ members = [
     "rj-civitas-cetrio-radar-ocr",
     "rj-civitas-data-catalog",
     "rj-civitas-disque-denuncia",
+    "rj-civitas-fogo-cruzado",
     "rj-civitas-run-dbt",
 ]
 overrides = [
@@ -655,6 +656,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/89/50/767448e792d41bfb6094ee317a355c1cb221dca24b2e178e2203bbea2a77/deepdiff-8.6.2.tar.gz", hash = "sha256:186dcbd181e4d76cef11ab05f802d0056c5d6083c5a6748c1473e9d7481e183e", size = 634860, upload-time = "2026-03-18T17:16:33.785Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2b/5f/c52bd1255db763d0cdcb7084d2e90c42119cb229302c56bdf1d0aa78abd2/deepdiff-8.6.2-py3-none-any.whl", hash = "sha256:4d22034a866c3928303a9332c279362f714192d9305bac17c498720d095fd1b4", size = 91979, upload-time = "2026-03-18T17:16:32.171Z" },
+]
+
+[[package]]
+name = "dill"
+version = "0.3.9"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/70/43/86fe3f9e130c4137b0f1b50784dd70a5087b911fe07fa81e53e0c4c47fea/dill-0.3.9.tar.gz", hash = "sha256:81aa267dddf68cbfe8029c42ca9ec6a4ab3b22371d1c450abc54422577b4512c", size = 187000, upload-time = "2024-09-29T00:03:20.958Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl", hash = "sha256:468dff3b89520b474c0397703366b7b95eebe6303f108adf9b19da1f702be87a", size = 119418, upload-time = "2024-09-29T00:03:19.344Z" },
 ]
 
 [[package]]
@@ -2600,6 +2610,28 @@ wheels = [
 ]
 
 [[package]]
+name = "redis"
+version = "4.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/73/88/63d802c2b18dd9eaa5b846cbf18917c6b2882f20efda398cc16a7500b02c/redis-4.6.0.tar.gz", hash = "sha256:585dc516b9eb042a619ef0a39c3d7d55fe81bdb4df09a52c9cdde0d07bf1aa7d", size = 4561721, upload-time = "2023-06-25T13:13:57.139Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/20/2e/409703d645363352a20c944f5d119bdae3eb3034051a53724a7c5fee12b8/redis-4.6.0-py3-none-any.whl", hash = "sha256:e2b03db868160ee4591de3cb90d40ebb50a90dd302138775937f6a42b7ed183c", size = 241149, upload-time = "2023-06-25T13:13:54.563Z" },
+]
+
+[[package]]
+name = "redis-pal"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dill" },
+    { name = "redis" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bf/01/82e5947eecd8b099be2432b9aa5a1a1bcb1807dd3a0cd13255ddec469ae6/redis-pal-1.0.0.tar.gz", hash = "sha256:8e20caf8127056a2d1208d6dd0873643efb8357602193e26c1ada8ed6737fa88", size = 14292, upload-time = "2022-06-03T18:04:05.315Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/62/24/71362e2dc84d495c015bbcf0cb2c1a086b0aa437ac1de760f92314083faa/redis_pal-1.0.0-py3-none-any.whl", hash = "sha256:8cbf55c926c761ce9d60803ed66ef2575f351b43c9554fd66f6458d323430bf0", size = 14867, upload-time = "2022-06-03T18:04:06.6Z" },
+]
+
+[[package]]
 name = "referencing"
 version = "0.37.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2776,6 +2808,33 @@ requires-dist = [
     { name = "pytz" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "xmltodict", specifier = ">=0.13.0" },
+]
+
+[[package]]
+name = "rj-civitas-fogo-cruzado"
+version = "0.1.0"
+source = { virtual = "pipelines/rj_civitas__fogo_cruzado" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "google-cloud-bigquery" },
+    { name = "pandas" },
+    { name = "prefect-rj-civitas" },
+    { name = "pytz" },
+    { name = "redis-pal" },
+    { name = "requests" },
+    { name = "urllib3" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiohttp", specifier = ">=3.9.0" },
+    { name = "google-cloud-bigquery", specifier = ">=3.0.0" },
+    { name = "pandas", specifier = ">=2.2.0" },
+    { name = "prefect-rj-civitas", editable = "." },
+    { name = "pytz" },
+    { name = "redis-pal", specifier = ">=1.0.0" },
+    { name = "requests", specifier = ">=2.31.0" },
+    { name = "urllib3", specifier = ">=2.0.0" },
 ]
 
 [[package]]
