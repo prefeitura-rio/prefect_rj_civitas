@@ -16,7 +16,12 @@ from iplanrio.pipelines_utils.prefect import log, rename_current_flow_run_task
 from prefect import flow
 from prefect.deployments import run_deployment
 from prefect.states import Completed
-from prefect_rj_civitas import run_deployment_task, verify_secrets_task, config
+from prefect_rj_civitas import (
+    run_deployment_task,
+    verify_secrets_task,
+    config,
+    skip_if_already_running
+    )
 from pipelines.rj_civitas__disque_denuncia.tasks import (
     get_reports_from_start_date,
     loop_transform_report_data,
@@ -53,6 +58,10 @@ def rj_civitas__disque_denuncia(
     required_secrets: tuple[str, ...] | None = None,
     gcs_buckets: dict[str, str] | None = None,
 ) -> Any:
+
+    if skip := skip_if_already_running():
+        return skip
+
     rename_current_flow_run_task(new_name=f"ELT_{dataset_id}_{table_id}")
     verify_secrets_task(secrets=required_secrets)
     inject_bd_credentials_task(environment="prod")
