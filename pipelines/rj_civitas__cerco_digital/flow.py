@@ -1,16 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-This flow is used to dump the database to the BIGQUERY
+This flow is used to run the cerco_digital pipeline
 """
 
-from typing import Literal, Optional
+from typing import Literal
 
-from iplanrio.pipelines_templates.dump_db.tasks import (
-    dump_upload_batch_task,
-    format_partitioned_query_task,
-    get_database_username_and_password_from_secret_task,
-    parse_comma_separated_string_to_list_task,
-)
 from iplanrio.pipelines_utils.env import inject_bd_credentials_task
 from iplanrio.pipelines_utils.prefect import log, rename_current_flow_run_task
 from prefect import flow
@@ -32,7 +26,6 @@ def rj_civitas__cerco_digital(
     target: str = "dev",
     # Flow parameters
     send_discord_report: bool = False,
-    flow_run_name: str | None = None,
     mode: Literal["dev", "prod", "staging"] = "prod",
 ):
     rename_current_flow_run_task(new_name="ELT_cerco_digital")
