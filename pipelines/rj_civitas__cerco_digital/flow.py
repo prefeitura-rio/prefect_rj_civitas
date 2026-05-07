@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-This flow is used to run the cerco_digital pipeline
+This flow is used to run the cerco_digital pipeline.
 """
 
 from typing import Literal
