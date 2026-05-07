@@ -4,6 +4,7 @@
 Migrated DBT Transform Flow from Prefect 1.4 to 3.0.
 """
 
+import json
 import os
 import shutil
 import shlex
@@ -18,7 +19,7 @@ from prefect import flow, runtime, task
 from prefect.states import Failed
 from prefect_dbt import PrefectDbtRunner
 from prefect_dbt.core.settings import PrefectDbtSettings
-from utils import (
+from pipelines.rj_civitas__run_dbt.utils import (
     Summarizer,
     download_from_cloud_storage,
     log_to_file,
@@ -79,6 +80,167 @@ def _extra_dbt_cli_tokens(flag: object) -> list[str]:
         return shlex.split(text)
     except ValueError:
         return [text]
+
+
+def _build_dbt_command_args(
+    command: str,
+    target: str = "dev",
+    select: str = "",
+    exclude: str = "",
+    state: str = "",
+    flag: object = "",
+    project_dir: str = "dbt_repository",
+) -> tuple[Path, list[str]]:
+    """
+    Build dbt argv with a single shared logic.
+
+    This function is used both by execute_dbt and flow run naming, so both stay in sync.
+    """
+    root, proj_flags = _dbt_project_root_flags(project_dir)
+
+    if command == "source freshness":
+        command_args = ["source", "freshness", *proj_flags]
+    else:
+        command_args = [command, *proj_flags]
+
+    if command in ("build", "run", "test", "source freshness", "seed", "snapshot"):
+        command_args.extend(["--target", target])
+        if select:
+            command_args.extend(["--select", select])
+        if exclude:
+            command_args.extend(["--exclude", exclude])
+        if state:
+            command_args.extend(["--state", state])
+        command_args.extend(_extra_dbt_cli_tokens(flag))
+    elif command == "retry":
+        command_args = ["retry", *proj_flags]
+        command_args.extend(["--state", state, "--target-path", state])
+
+    return root, command_args
+
+
+def _strip_dbt_path_flags(command_args: list[str]) -> list[str]:
+    """Remove --project-dir/--profiles-dir and their values (noise for display)."""
+    hidden = {"--project-dir", "--profiles-dir"}
+    out: list[str] = []
+    skip_next = False
+    for token in command_args:
+        if skip_next:
+            skip_next = False
+            continue
+        if token in hidden:
+            skip_next = True
+            continue
+        out.append(token)
+    return out
+
+
+def _parse_dbt_vars_keys(vars_token: str) -> list[str]:
+    try:
+        data = json.loads(vars_token)
+    except json.JSONDecodeError:
+        return []
+    if isinstance(data, dict):
+        return sorted(data.keys())
+    return []
+
+
+def _exclude_token_count(exclude: str) -> int:
+    parts = [p for p in exclude.replace(",", " ").split() if p]
+    return len(parts) if parts else 0
+
+
+def _segment_for_flow_name(s: str, max_len: int = 60) -> str:
+    """Safe segment for flow run name (no double-underscore in value to avoid ambiguity)."""
+    t = (
+        s.replace("|", "_")
+        .replace("__", "_")
+        .replace("\n", " ")
+        .strip()[:max_len]
+    )
+    return t
+
+
+def _default_flow_run_name(command_args: list[str], max_len: int = 100) -> str:
+    """
+    Short name, e.g. DBT_build_dev__sel=cerco_digital__x=2__v=start_date-end_date.
+    Omits project/profiles paths and state paths. Var keys sorted, joined with '-'.
+    """
+    filtered = _strip_dbt_path_flags(command_args)
+
+    if not filtered:
+        return "DBT_?"
+
+    i = 0
+    if len(filtered) >= 2 and filtered[0] == "source" and filtered[1] == "freshness":
+        cmd = "source_freshness"
+        i = 2
+    else:
+        cmd = _segment_for_flow_name(filtered[0], max_len=40).replace(" ", "_")
+        i = 1
+
+    target = ""
+    select = ""
+    exclude = ""
+    var_keys: list[str] = []
+
+    while i < len(filtered):
+        tok = filtered[i]
+        if tok == "--target" and i + 1 < len(filtered):
+            target = _segment_for_flow_name(filtered[i + 1], max_len=24)
+            i += 2
+            continue
+        if tok == "--select" and i + 1 < len(filtered):
+            select = filtered[i + 1]
+            i += 2
+            continue
+        if tok == "--exclude" and i + 1 < len(filtered):
+            exclude = filtered[i + 1]
+            i += 2
+            continue
+        if tok == "--state" and i + 1 < len(filtered):
+            i += 2
+            continue
+        if tok == "--target-path" and i + 1 < len(filtered):
+            i += 2
+            continue
+        if tok == "--vars" and i + 1 < len(filtered):
+            var_keys = _parse_dbt_vars_keys(filtered[i + 1])
+            i += 2
+            continue
+        i += 1
+
+    base = f"DBT_{cmd}" + (f"_{target}" if target else "")
+    extras: list[str] = []
+    if select:
+        sel_short = _segment_for_flow_name(select.strip(), max_len=50)
+        extras.append(f"sel={sel_short}")
+    n_ex = _exclude_token_count(exclude)
+    if n_ex:
+        extras.append(f"x={n_ex}")
+    if var_keys:
+        extras.append(f"v={'-'.join(var_keys)}")
+
+    name = base + ("__" + "__".join(extras) if extras else "")
+
+    if len(name) <= max_len:
+        return name
+
+    # Shorten sel= value if needed (keep DBT_cmd_target prefix).
+    marker = "__sel="
+    if marker in name:
+        prefix, rest = name.split(marker, 1)
+        sel_end = rest.find("__")
+        if sel_end == -1:
+            sel_val, suffix = rest, ""
+        else:
+            sel_val, suffix = rest[:sel_end], rest[sel_end:]
+        budget = max_len - len(prefix) - len(marker) - len(suffix)
+        if budget >= 4 and len(sel_val) > budget:
+            sel_val = sel_val[: budget - 1] + "…"
+        name = prefix + marker + sel_val + suffix
+
+    return name[:max_len]
 
 
 @task
@@ -165,28 +327,15 @@ def execute_dbt(
         PrefectDbtResult: Result of the DBT command execution
     """
 
-    root, proj_flags = _dbt_project_root_flags(project_dir)
-
-    # Build the command arguments
-    if command == "source freshness":
-        command_args = ["source", "freshness", *proj_flags]
-    else:
-        command_args = [command, *proj_flags]
-
-    # Add common arguments for most DBT commands
-    if command in ("build", "run", "test", "source freshness", "seed", "snapshot"):
-        command_args.extend(["--target", target])
-
-        if select:
-            command_args.extend(["--select", select])
-        if exclude:
-            command_args.extend(["--exclude", exclude])
-        if state:
-            command_args.extend(["--state", state])
-        command_args.extend(_extra_dbt_cli_tokens(flag))
-    elif command == "retry":
-        command_args = ["retry", *proj_flags]
-        command_args.extend(["--state", state, "--target-path", state])
+    root, command_args = _build_dbt_command_args(
+        command=command,
+        target=target,
+        select=select,
+        exclude=exclude,
+        state=state,
+        flag=flag,
+        project_dir=project_dir,
+    )
 
     log(f"Executing dbt command: {' '.join(command_args)}", level="info")
     log(f"dbt project root: {root} (profiles.yml exists: {(root / 'profiles.yml').exists()})", level="info")
@@ -441,8 +590,6 @@ def rj_civitas__run_dbt(
         gcs_buckets (GcsBucket): GCS bucket configuration
         flow_run_name (str): Flow run name
     """
-    rename_current_flow_run_task(new_name=flow_run_name or f"DBT_{command}_{target}")
-
     # Validate required parameters
     if not github_repo:
         raise ValueError("github_repo is required")
@@ -461,6 +608,20 @@ def rj_civitas__run_dbt(
 
     # Download repository
     download_repository_task = download_repository(git_repository_path=github_repo)
+
+    if flow_run_name:
+        effective_flow_run_name = flow_run_name
+    else:
+        _, preview_command_args = _build_dbt_command_args(
+            command=command,
+            target=target,
+            select=select or "",
+            exclude=exclude or "",
+            flag=flag or "",
+            project_dir=download_repository_task,
+        )
+        effective_flow_run_name = _default_flow_run_name(preview_command_args)
+    rename_current_flow_run_task(new_name=effective_flow_run_name)
 
     # Download dbt artifacts
     download_dbt_artifacts_task = download_dbt_artifacts_from_gcs(
