@@ -75,7 +75,7 @@ deployments:
           send_discord_report: true
           github_repo: "https://github.com/prefeitura-rio/pipelines_rj_civitas.git"
           bigquery_project: "rj-civitas"
-          target: "prod"
+          target: "dev"
           gcs_buckets:
             prod: "rj-civitas_dbt"
             dev: "rj-civitas-dev_dbt"
