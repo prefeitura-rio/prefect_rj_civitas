@@ -25,6 +25,7 @@ pull:
 
 deployments:
   - name: rj-civitas--disque_denuncia--staging
+    tags: [staging]
     version: "{{ build-image.tag }}"
     entrypoint: pipelines/rj_civitas__disque_denuncia/flow.py:rj_civitas__disque_denuncia
     work_pool:
@@ -36,6 +37,7 @@ deployments:
         secretName: prefect-jobs-secrets-staging
         image_pull_policy: Always
   - name: rj-civitas--disque_denuncia--prod
+    tags: [prod]
     version: "{{ get-commit-hash.stdout }}"
     entrypoint: pipelines/rj_civitas__disque_denuncia/flow.py:rj_civitas__disque_denuncia
     work_pool:
