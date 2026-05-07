@@ -1,0 +1,10 @@
+[project]
+name = "rj_civitas__cerco_digital"
+version = "0.1.0"
+description = "Pipeline cerco_digital da secretaria civitas"
+dependencies = [
+    "prefect_rj_civitas",
+]
+
+[tool.uv.sources]
+prefect_rj_civitas = { workspace = true }
