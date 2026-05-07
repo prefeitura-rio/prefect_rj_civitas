@@ -14,6 +14,7 @@ from iplanrio.pipelines_templates.dump_db.tasks import (
 from iplanrio.pipelines_utils.env import inject_bd_credentials_task
 from iplanrio.pipelines_utils.prefect import rename_current_flow_run_task
 from prefect import flow
+from prefect_rj_civitas import skip_if_already_running
 
 
 @flow(log_prints=True)
@@ -44,6 +45,10 @@ def rj_{{ cookiecutter.secretaria }}__{{ cookiecutter.pipeline }}(
     add_timestamp_column: bool = True,
 ):
     rename_current_flow_run_task(new_name=table_id)
+
+    if skip := skip_if_already_running():
+        return skip
+
     inject_bd_credentials_task(environment="prod")
     secrets = get_database_username_and_password_from_secret_task(infisical_secret_path=infisical_secret_path)
     partition_columns_list = parse_comma_separated_string_to_list_task(text=partition_columns)
