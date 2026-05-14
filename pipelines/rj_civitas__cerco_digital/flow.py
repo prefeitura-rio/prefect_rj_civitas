@@ -9,7 +9,7 @@ from iplanrio.pipelines_utils.env import inject_bd_credentials_task
 from iplanrio.pipelines_utils.prefect import log, rename_current_flow_run_task
 from prefect import flow
 from pipelines.rj_civitas__cerco_digital.tasks import add_default_start_date_var_to_dbt_flags
-from prefect_rj_civitas import config, run_deployment_task, skip_if_already_running
+from prefect_rj_civitas import config, run_deployment_task, skip_if_already_running, verify_secrets_task
 
 
 @flow(log_prints=True)
@@ -20,6 +20,7 @@ def rj_civitas__cerco_digital(
     github_repo: str,
     command: str,
     bigquery_project: str,
+    required_secrets: tuple[str, ...],
     select: str | None = None,
     exclude: str | None = None,
     flag: str | None = None,
@@ -34,6 +35,7 @@ def rj_civitas__cerco_digital(
         return skip
 
     inject_bd_credentials_task(environment="prod")
+    verify_secrets_task(secrets=required_secrets)
 
     dbt_flags = add_default_start_date_var_to_dbt_flags(flag=flag)
 
