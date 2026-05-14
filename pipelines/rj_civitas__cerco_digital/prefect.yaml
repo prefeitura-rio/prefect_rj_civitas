@@ -65,3 +65,5 @@ deployments:
         exclude: "vw_readings"
         target: dev
         mode: prod
+        required_secrets:
+          - HEXAGON_VMS__RTSP_URL_PREFIX
