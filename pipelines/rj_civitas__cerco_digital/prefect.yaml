@@ -61,7 +61,7 @@ deployments:
         github_repo: https://github.com/prefeitura-rio/pipelines_rj_civitas
         command: build
         bigquery_project: rj-civitas
-        select: "cerco_digital"
+        select: "+cerco_digital"
         exclude: "vw_readings"
         target: dev
         mode: prod
