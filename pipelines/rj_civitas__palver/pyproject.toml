@@ -1,0 +1,10 @@
+[project]
+name = "rj_civitas__palver"
+version = "0.1.0"
+description = "Pipeline palver da secretaria civitas"
+dependencies = [
+    "prefect_rj_civitas",
+]
+
+[tool.uv.sources]
+prefect_rj_civitas = { workspace = true }
