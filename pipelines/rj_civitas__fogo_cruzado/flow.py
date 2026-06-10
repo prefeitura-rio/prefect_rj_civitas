@@ -10,6 +10,8 @@ Migrado de pipelines_rj_civitas Prefect 1.4 (fogo_cruzado/extract_load):
 """
 
 
+import dotenv
+from os import environ
 from typing import Any, Literal
 
 from iplanrio.pipelines_utils.env import inject_bd_credentials_task
@@ -46,7 +48,7 @@ def rj_civitas__fogo_cruzado(
     required_secrets: tuple[str, ...] = (
         "FOGOCRUZADO_USERNAME",
         "FOGOCRUZADO_PASSWORD",
-        "REDIS_HOST",
+#        "REDIS_HOST",
     ),
 ) -> Any:
     rename_current_flow_run_task(new_name=f"{prefix}{dataset_id}_{table_id}")
@@ -54,8 +56,14 @@ def rj_civitas__fogo_cruzado(
     if skip := skip_if_already_running():
         return skip
 
-    verify_secrets_task(secrets=required_secrets)
-    inject_bd_credentials_task(environment="prod")
+    if mode == "dev":
+        dotenv.load_dotenv()
+        verify_secrets_task(secrets=required_secrets)
+        environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/tmp/credentials.json"
+        log("INJECTED: GCP credentials from service account")
+    else:
+        verify_secrets_task(secrets=required_secrets)
+        inject_bd_credentials_task(environment="prod")
 
     resolved_start_date = resolve_start_date_task(days_offset=30)
 
