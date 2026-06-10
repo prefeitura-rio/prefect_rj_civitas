@@ -152,20 +152,21 @@ def update_token_on_redis(data: requests.Response, redis_password: str | None = 
 def get_valid_token(email: str, password: str, redis_password: str | None = None) -> str:
     """Returns a valid auth token, using cache when possible."""
     try:
-        token_data = get_on_redis(
-            dataset_id="fogo_cruzado",
-            table_id="ocorrencias",
-            name="api_token",
-            redis_password=redis_password,
-        )
-
-        if is_token_valid(token_data):
-            log("Using cached token", level="info")
-            return token_data["accessToken"]
-
-        log("Token expired or invalid. Requesting new token...", level="info")
+#        token_data = get_on_redis(
+#            dataset_id="fogo_cruzado",
+#            table_id="ocorrencias",
+#            name="api_token",
+#            redis_password=redis_password,
+#        )
+#
+#        if is_token_valid(token_data):
+#            log("Using cached token", level="info")
+#            return token_data["accessToken"]
+#
+#        log("Token expired or invalid. Requesting new token...", level="info")
+        log("Requesting new token...", level="info")
         response = auth(email, password)
-        update_token_on_redis(response, redis_password=redis_password)
+#        update_token_on_redis(response, redis_password=redis_password)
         log("Token updated successfully", level="info")
 
         return response.json().get("data", {}).get("accessToken")
