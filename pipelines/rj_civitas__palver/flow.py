@@ -41,11 +41,11 @@ def rj_civitas__palver(
     github_repo: str = "https://github.com/prefeitura-rio/pipelines_rj_civitas",
     gcs_buckets: dict[str, str] | None = None,
     required_secrets: tuple[str, ...] = (
-        "PALVER_API_HOST",
-        "PALVER_API_TOKEN"
+        "PALVER_BASE_URL",
+        "PALVER_TOKEN"
     )
 ):
-    table_id = f"palver_{message_source}_messages"
+    table_id = f"palver_{message_source.replace('.', '_')}_messages"
 
     rename_current_flow_run_task(new_name=f"{write_disposition}_{dataset_id}_{table_id}")
 
@@ -79,3 +79,13 @@ def rj_civitas__palver(
     with open("/tmp/dados.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     log("SUCESSO: dados salvos em /tmp/dados.json")
+
+    load_to_table_task(
+        project_id=project_id,
+        dataset_id=f"{dataset_id}_staging",
+        table_id=table_id,
+        source=message_source,
+        data=data,
+        write_disposition=write_disposition,
+        mode=mode,
+    )

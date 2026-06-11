@@ -15,7 +15,7 @@ import urllib3
 from google.cloud import bigquery
 from iplanrio.pipelines_utils.logging import log, log_mod
 
-from pipelines.rj_civitas__palver.schemas import get_source_schema, get_source_parameters
+from pipelines.rj_civitas__palver.schemas import get_source_parameters
 
 tz = pytz.timezone("America/Sao_Paulo")
 
@@ -41,7 +41,8 @@ async def get_data(
     params["endDate"] = f"{datetime.now(tz=tz).strftime('%Y-%m-%d')}T03:00:00Z"
 
     headers={
-            "Authorization": f"Bearer {token}"
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json; charset=UTF-8" 
         }
     api_url = f"{host}/{source}/messages"
 
@@ -158,6 +159,8 @@ def save_data_in_bq(
 
     job_config = bigquery.LoadJobConfig(
         schema=schema,
+        ignore_unknown_values=True,
+        create_disposition=bigquery.CreateDisposition.CREATE_IF_NEEDED,
         write_disposition=write_disposition,
         time_partitioning=bigquery.TimePartitioning(
             type_=bigquery.TimePartitioningType.MONTH,
