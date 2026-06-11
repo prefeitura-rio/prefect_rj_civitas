@@ -60,7 +60,7 @@ def fetch_messages_task(
     host = getenv_or_action("PALVER_BASE_URL", action="raise")
     token = getenv_or_action("PALVER_TOKEN", action="raise")
 
-    log("Fetching data...", level="info")
+    log(f"Fetching data from {source}...", level="info")
     data = asyncio.run(
         get_data(
             host=host,
@@ -72,7 +72,7 @@ def fetch_messages_task(
         )
     )
 
-    log("Data fetched successfully.", level="info")
+    log(f"Data from {source} fetched successfully.", level="info")
     return data
 
 
@@ -81,7 +81,7 @@ def load_to_table_task(
     project_id: str,
     dataset_id: str,
     table_id: str,
-    source: str,
+    source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"],
     data: List[Dict[str, Any]],
     write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"] = "WRITE_APPEND",
     mode: Literal["dev", "prod", "staging"] = "prod",
