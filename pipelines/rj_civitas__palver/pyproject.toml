@@ -3,7 +3,11 @@ name = "rj_civitas__palver"
 version = "0.1.0"
 description = "Pipeline palver da secretaria civitas"
 dependencies = [
+    "geopy>=2.4.1",
+    "gliner>=0.2.26",
+    "googlemaps>=4.10.0",
     "prefect_rj_civitas",
+    "spacy>=3.8.14",
 ]
 
 [tool.uv.sources]

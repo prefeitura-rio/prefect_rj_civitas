@@ -5,29 +5,35 @@ Helpers para a pipeline Palver.
 Inclui fetch assíncrono de ocorrências e escrita em BigQuery.
 """
 import asyncio
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
 import aiohttp
+import googlemaps
+import json
 import pandas as pd
 import pytz
 import urllib3
 from google.cloud import bigquery
+from google import genai
+from google.genai import types
 from iplanrio.pipelines_utils.logging import log, log_mod
 
-from pipelines.rj_civitas__palver.schemas import get_source_parameters
+from pipelines.rj_civitas__palver.schemas import get_source_parameters, get_source_text_fields, LLMGeoSchema
+from pipelines.rj_civitas__palver.cache import redis_client
 
 tz = pytz.timezone("America/Sao_Paulo")
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-
 async def get_data(
     host: str,
     token: str,
     source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"],
-    initial_date: str,        
+    start_date: str,
+    end_date: str,        
     query: str,
     docs_per_page: int,
     max_concurrent: int = 5,
@@ -37,8 +43,8 @@ async def get_data(
     params = get_source_parameters(source)
     params["query"] = query
     params["perPage"] = docs_per_page
-    params["startDate"] = f"{initial_date}T03:00:00Z"
-    params["endDate"] = f"{datetime.now(tz=tz).strftime('%Y-%m-%d')}T03:00:00Z"
+    params["startDate"] = f"{start_date}"
+    params["endDate"] = f"{end_date}"
 
     headers={
             "Authorization": f"Bearer {token}",
@@ -143,6 +149,133 @@ async def get_data(
             level="info",
         )
         return docs
+
+
+async def llm_extract_single_text(
+        semaphore: asyncio.Semaphore,
+        client: genai.Client, 
+        model: str,
+        source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"],
+        text: str,
+        doc: Dict[str, Any]) -> Optional[LLMGeoSchema]:
+    """Função assíncrona que analisa a relevância do texto e extrai suas informações geográficas"""
+    text_type = "o post de rede social" if source in ("whatsapp", "twitter") else "a notícia"
+    prompt = f"Analise {text_type} sobre segurança pública abaixo. Extraia as informações geográficas exigidas estritamente de acordo com o esquema JSON fornecido.\n\nTexto:\n{text}"
+    
+    config = types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_schema=LLMGeoSchema.model_json_schema(),
+        temperature=0.1
+    )
+    async with semaphore:
+        try:
+            response = await client.aio.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=config,
+            )
+            result = LLMGeoSchema.model_validate_json(response.text)
+            if result:
+                doc["is_relevant"] = result.is_relevant
+                doc["locations"] = result.locations
+                doc["main_location"] = result.main_location
+            return doc
+        except Exception as e:
+            print(f"Erro ao processar texto: {e}")
+            return doc
+
+
+
+async def llm_extract_relevance_and_locations_from_text(
+        client: genai.Client, 
+        model: str,
+        source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"],
+        data: List[Dict[str, Any]]):
+    """Envelopa a chamada da API usando o semáforo para limitar acessos simultâneos"""
+    print(f"Iniciando a extração de dados geográficos de {len(data)} textos de {source}...")
+    semaphore = asyncio.Semaphore(5) 
+
+    text_fields = get_source_text_fields(source)
+    extractions = []
+    for doc in data:
+        lines = []
+        for field in text_fields:
+            value = doc.get(field, "")
+            if value:
+                lines.append(value)
+        
+        text = "\n".join(lines)
+
+        if not text:
+            extractions.append(asyncio.sleep(0, result=doc))
+            continue
+    
+        task = llm_extract_single_text(semaphore, client, model, source, text, doc)
+        extractions.append(task)
+
+    results = await asyncio.gather(*extractions)
+    return results
+
+
+def get_geolocation_from_cache(location: str):
+    normalized_location = " ".join(location.strip().lower().split())
+    string_data = redis_client.get(f"palver:location:{normalized_location}")
+    data = json.loads(string_data) if string_data else None
+    return data
+
+
+def set_location_to_cache(location: str, details: dict):
+    normalized_location = " ".join(location.strip().lower().split())
+    redis_client.set(f"palver:location:{normalized_location}", json.dumps(details))
+    return
+
+
+def get_geolocation(search_text: str, google_maps_api_key: str):  
+    cached = get_geolocation_from_cache(search_text)
+    if cached:
+        return cached
+      
+    client = googlemaps.Client(key=google_maps_api_key)
+    try:
+        geocode_result = client.geocode(
+            address=search_text,
+            region="br",  
+        )
+        
+        if not geocode_result:
+            return None
+        
+        result = None
+
+        for partial_result in geocode_result:
+            state = next(
+                (
+                    c["short_name"]
+                    for c in partial_result["address_components"]
+                    if "administrative_area_level_1" in c["types"]
+                ),
+                None,
+            )
+            if state == "RJ":
+                result = partial_result
+                break
+        
+        if not result:
+            return None
+        
+        location = result["geometry"]["location"]
+
+        details = {
+            "full_address": result["formatted_address"],
+            "latitude": location["lat"],
+            "longitude": location["lng"],
+            }
+        set_location_to_cache(search_text, details)
+        return details
+
+    except Exception as e:
+        log(f"Error geocoding locality {search_text}: {str(e)}")
+        return None
 
 
 def save_data_in_bq(

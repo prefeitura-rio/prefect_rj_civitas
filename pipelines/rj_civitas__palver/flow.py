@@ -22,6 +22,11 @@ from pipelines.rj_civitas__palver.tasks import (
     fetch_messages_task,
     load_to_table_task,
     resolve_start_date_task,
+    resolve_incremental_date_task,
+    clean_text_task,
+    enrich_with_tags_task,
+    llm_enrich_task,
+    get_geolocation_task
 )
 
 
@@ -31,10 +36,13 @@ def rj_civitas__palver(
     dataset_id: str = "palver",
     sources: list[Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"]] = ["whatsapp", "news", "press", "radio.medias", "television", "twitter"],
     docs_per_page: int = 100,
+    incremental: bool = True,
     start_date: str | None = None,
-    days_offset: int = 30,
-    query: str = "tiroteio",
+    end_date: str | None = None,
+    minutes_offset: int = 1440,
+    query: str = "tiroteio~ OR assalt* OR tr?fic* OR mil?ci* OR furtou OR furtaram OR homicídio~ OR furtou OR furtaram OR feminicídio OR latrocínio",
     write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"] = "WRITE_APPEND",
+    llm_model: str = "gemini-2.5-flash",
     materialize_after_dump: bool = True,
     mode: Literal["dev", "prod", "staging"] = "prod",
     github_repo: str = "https://github.com/prefeitura-rio/pipelines_rj_civitas",
@@ -58,12 +66,29 @@ def rj_civitas__palver(
 
     verify_secrets_task(secrets=required_secrets)
 
-    resolved_start_date = resolve_start_date_task(start_date, days_offset)
+    google_maps_api_key = environ["GOOGLE_MAPS_API_KEY"]
+
+    resolved_start_date = resolve_start_date_task(start_date, minutes_offset)
+
+    if mode in ("dev", "staging"):
+        project_id = f"{project_id}-dev"
 
     for source in sources:
         table_id = f"palver_{source.replace('.', '_')}_messages"
+
+        if incremental:
+            incremental_date = resolve_incremental_date_task(
+                project_id=project_id,
+                dataset_id=f"{dataset_id}_staging",
+                table_id=table_id,
+                mode=mode
+            )
+            if incremental_date:
+                resolved_start_date = incremental_date
+
         data = fetch_messages_task(
             start_date=resolved_start_date,
+            end_date=end_date,
             docs_per_page=docs_per_page,
             source=source,
             query=query
@@ -72,6 +97,14 @@ def rj_civitas__palver(
         if not data:
             log(f"No data from {source} returned by the API.")
             continue
+        
+        data = clean_text_task(source=source, data=data)
+
+        data = enrich_with_tags_task(source=source, data=data)
+
+        data = llm_enrich_task(source=source, data=data, model=llm_model)
+
+        data = get_geolocation_task(source=source, data=data, google_maps_api_key=google_maps_api_key)
 
         load_to_table_task(
             project_id=project_id,
@@ -79,6 +112,5 @@ def rj_civitas__palver(
             table_id=table_id,
             source=source,
             data=data,
-            write_disposition=write_disposition,
-            mode=mode,
+            write_disposition=write_disposition
         )
