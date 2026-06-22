@@ -80,8 +80,7 @@ def rj_civitas__palver(
             incremental_date = resolve_incremental_date_task(
                 project_id=project_id,
                 dataset_id=f"{dataset_id}_staging",
-                table_id=table_id,
-                mode=mode
+                table_id=table_id
             )
             if incremental_date:
                 resolved_start_date = incremental_date

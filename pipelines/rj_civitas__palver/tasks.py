@@ -132,12 +132,19 @@ def clean_text_task(
     data: List[Dict[str, Any]],
     source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"]
 ) -> List[Dict[str, Any]]:
-    if source=="radio.medias":
-        log("Cleaning radio transcription texts")
+    if source in ("radio.medias", "whatsapp"):
+        log("Cleaning transcription texts")
         for doc in data:
-            cleaned_text  = re.sub(r'\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}|\n\d+\n|^\d+\n', '', doc["transcript"])
-            doc["transcript"] = cleaned_text 
-        log("Radio transcriptions successfully cleaned")
+            if doc.get("transcript", ""):
+                cleaned_text  = re.sub(r'\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}|\n\d+\n|^\d+\n', '', doc["transcript"])
+                doc["transcript"] = cleaned_text 
+        log("Transcriptions successfully cleaned")
+
+    if source=="whatsapp":
+        for doc in data:
+            if not doc.get("text", "") and doc.get("transcript", ""):
+                doc["text"] = doc["transcript"]
+
     return data
 
 
