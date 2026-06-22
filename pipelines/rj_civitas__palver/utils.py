@@ -181,7 +181,7 @@ async def llm_extract_single_text(
                 doc["main_location"] = result.main_location
             return doc
         except Exception as e:
-            print(f"Erro ao processar texto: {e}")
+            log(f"Error while proccessing text: {e}")
             return doc
 
 
@@ -192,7 +192,7 @@ async def llm_extract_relevance_and_locations_from_text(
         source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"],
         data: List[Dict[str, Any]]):
     """Envelopa a chamada da API usando o semáforo para limitar acessos simultâneos"""
-    print(f"Iniciando a extração de dados geográficos de {len(data)} textos de {source}...")
+    print(f"Starting geographic data extraction of  {len(data)} texts from {source}...")
     semaphore = asyncio.Semaphore(5) 
 
     text_fields = get_source_text_fields(source)
@@ -284,12 +284,14 @@ def save_data_in_bq(
     table_id: str,
     schema: List[bigquery.SchemaField],
     json_data: List[Dict[str, Any]],
-    write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"] = "WRITE_APPEND",
+    write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"],
+    source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"]
 ) -> None:
     """Saves a list of dictionaries to a BigQuery table partitioned monthly."""
     client = bigquery.Client()
     table_full_name = f"{project_id}.{dataset_id}.{table_id}"
 
+    partition_field = "c_processed_at" if source=="press" else "datetime"
     job_config = bigquery.LoadJobConfig(
         schema=schema,
         ignore_unknown_values=True,
@@ -297,9 +299,9 @@ def save_data_in_bq(
         write_disposition=write_disposition,
         time_partitioning=bigquery.TimePartitioning(
             type_=bigquery.TimePartitioningType.MONTH,
-            field="timestamp_insercao",
+            field=partition_field,
         ),
-        clustering_fields=["timestamp_insercao"],
+        clustering_fields=["id"],
     )
 
     timestamp_now = datetime.now(tz=tz).strftime("%Y-%m-%d %H:%M:%S")

@@ -5,12 +5,11 @@ CIVITAS — Extração e carga no datalake dos dados da Palver (Prefect 3).
 
 from dotenv import load_dotenv
 from os import environ
-from typing import Literal
+from typing import Literal, Any
 
 from iplanrio.pipelines_utils.env import inject_bd_credentials_task
 from iplanrio.pipelines_utils.prefect import log, rename_current_flow_run_task
 from prefect import flow
-from prefect.states import Completed
 from prefect_rj_civitas import (
     config,
     run_deployment_task,
@@ -46,7 +45,6 @@ def rj_civitas__palver(
     materialize_after_dump: bool = True,
     mode: Literal["dev", "prod", "staging"] = "prod",
     github_repo: str = "https://github.com/prefeitura-rio/pipelines_rj_civitas",
-    gcs_buckets: dict[str, str] | None = None,
     required_secrets: tuple[str, ...] = (
         "PALVER_BASE_URL",
         "PALVER_TOKEN"
@@ -113,3 +111,27 @@ def rj_civitas__palver(
             data=data,
             write_disposition=write_disposition
         )
+
+        if materialize_after_dump:
+            dbt_select = dataset_id
+            materialize_after_dump_parameters: dict[str, Any] = {
+                "command": "build",
+                "select": dbt_select,
+                "send_discord_report": True,
+                "github_repo": github_repo,
+                "bigquery_project": project_id,
+                "target": "dev"
+            }
+
+            materialize_after_dump_future = run_deployment_task.submit(
+                name=config.run_dbt_deployment_name + "--" + mode,
+                parameters=materialize_after_dump_parameters,
+                timeout=None,
+                as_subflow=False,
+            )
+            materialize_after_dump_run = materialize_after_dump_future.result()
+            log(
+                f"Materialize after dump deployment run: {materialize_after_dump_run.id}",
+                level="info",
+            )
+

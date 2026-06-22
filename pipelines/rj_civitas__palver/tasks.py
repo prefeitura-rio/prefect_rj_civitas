@@ -109,7 +109,10 @@ def fetch_messages_task(
 
         end_date = dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ")
     except:
-        end_date = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if source=="press":
+            end_date = datetime.now(tz=UTC).strftime("%Y-%m-%dT02:59:59Z")
+        else:
+            end_date = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     
     log(f"Fetching data from {source}\nStart Date: {start_date}\nEnd date: {end_date}", level="info")
     data = asyncio.run(
@@ -132,7 +135,7 @@ def clean_text_task(
     data: List[Dict[str, Any]],
     source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"]
 ) -> List[Dict[str, Any]]:
-    if source in ("radio.medias", "whatsapp"):
+    if source in ("radio.medias", "whatsapp", "television"):
         log("Cleaning transcription texts")
         for doc in data:
             if doc.get("transcript", ""):
@@ -285,5 +288,6 @@ def load_to_table_task(
         schema=schema,
         json_data=data,
         write_disposition=write_disposition,
+        source=source
     )
     log(f"{len(data)} occurrences written to {project_id}.{dataset_id}.{table_id}")
