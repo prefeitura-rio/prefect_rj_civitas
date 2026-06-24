@@ -21,7 +21,6 @@ from google.genai import types
 from iplanrio.pipelines_utils.logging import log, log_mod
 
 from pipelines.rj_civitas__palver.schemas import get_source_parameters, get_source_text_fields, LLMGeoSchema
-from pipelines.rj_civitas__palver.cache import redis_client
 
 tz = pytz.timezone("America/Sao_Paulo")
 
@@ -217,24 +216,7 @@ async def llm_extract_relevance_and_locations_from_text(
     return results
 
 
-def get_geolocation_from_cache(location: str):
-    normalized_location = " ".join(location.strip().lower().split())
-    string_data = redis_client.get(f"palver:location:{normalized_location}")
-    data = json.loads(string_data) if string_data else None
-    return data
-
-
-def set_location_to_cache(location: str, details: dict):
-    normalized_location = " ".join(location.strip().lower().split())
-    redis_client.set(f"palver:location:{normalized_location}", json.dumps(details))
-    return
-
-
-def get_geolocation(search_text: str, google_maps_api_key: str):  
-    cached = get_geolocation_from_cache(search_text)
-    if cached:
-        return cached
-      
+def get_geolocation(search_text: str, google_maps_api_key: str):        
     client = googlemaps.Client(key=google_maps_api_key)
     try:
         geocode_result = client.geocode(
@@ -246,7 +228,7 @@ def get_geolocation(search_text: str, google_maps_api_key: str):
             return None
         
         result = None
-
+        city = ""
         for partial_result in geocode_result:
             state = next(
                 (
@@ -258,6 +240,24 @@ def get_geolocation(search_text: str, google_maps_api_key: str):
             )
             if state == "RJ":
                 result = partial_result
+                city = (
+                    next(
+                        (
+                            c["long_name"]
+                            for c in result["address_components"]
+                            if "locality" in c["types"]
+                        ),
+                        None,
+                    )
+                    or next(
+                        (
+                            c["long_name"]
+                            for c in result["address_components"]
+                            if "administrative_area_level_2" in c["types"]
+                        ),
+                        "",
+                    )
+                )
                 break
         
         if not result:
@@ -267,10 +267,10 @@ def get_geolocation(search_text: str, google_maps_api_key: str):
 
         details = {
             "full_address": result["formatted_address"],
+            "city": city,
             "latitude": location["lat"],
             "longitude": location["lng"],
             }
-        set_location_to_cache(search_text, details)
         return details
 
     except Exception as e:

@@ -49,34 +49,49 @@ deployments:
 
     schedules:
     # Exemplo de schedule overwrite
-    - interval: 86400 # executa a cada 24h
-      anchor_date: "2022-01-01T01:00:00" # Data de inicio do schedule em UTC
+    - interval: 300 # executa a cada 5 minutos
+      anchor_date: "2026-06-24T00:00:00" # Data de inicio do schedule em UTC
       timezone: America/Sao_Paulo
-      slug: slug # slug do schedule
+      slug: 'palver_fresh_sources' # slug do schedule
       parameters:
-        table_id: table_id # Nome da tabela no BigQuery
-        execute_query: |
-          SELECT
-            column1,
-            column2,
-            column3
-          FROM database.table_name
+        project_id: rj-civitas
+        dataset_id: palver
+        sources: 
+          - whatsapp
+          - news
+          - radio.medias
+          - television
+          - twitter
+        docs_per_page: 100
+        incremental: true
+        minutes_offset: 1440
+        query: "tiroteio~ OR assalt* OR tr?fic* OR mil?ci* OR furtou OR furtaram OR homicídio~ OR furtou OR furtaram OR feminicídio OR latrocínio"
+        write_disposition: WRITE_APPEND
+        materialize_after_dump: true
+        mode: prod
+        github_repo: https://github.com/prefeitura-rio/pipelines_rj_civitas
+        required_secrets:
+          - PALVER_BASE_URL
+          - PALVER_TOKEN
+        
     # Exemplo de schedule incremental
     - interval: 86400
-      anchor_date: "2022-01-01T02:32:00"
+      anchor_date: "2026-06-24T03:04:00"
       timezone: America/Sao_Paulo
-      slug: slug
+      slug: 'palver_press_daily'
       parameters:
-        table_id: table_id
-        dump_mode: append
-        partition_columns: partition_column # Coluna de particionamento
-        partition_date_format: "%Y-%m-%d" # Formato da data de particionamento
-        break_query_frequency: day # Frequencia de particionamento
-        break_query_start: current_day # Data de inicio do particionamento
-        break_query_end: current_day # Data de fim do particionamento
-        execute_query: |
-          SELECT
-            column1,
-            column2,
-            column3
-          FROM database.table_name
+        project_id: rj-civitas
+        dataset_id: palver
+        sources: 
+          - press
+        docs_per_page: 100
+        incremental: true
+        minutes_offset: 1440
+        query: "tiroteio~ OR assalt* OR tr?fic* OR mil?ci* OR furtou OR furtaram OR homicídio~ OR furtou OR furtaram OR feminicídio OR latrocínio"
+        write_disposition: WRITE_APPEND
+        materialize_after_dump: true
+        mode: prod
+        github_repo: https://github.com/prefeitura-rio/pipelines_rj_civitas
+        required_secrets:
+          - PALVER_BASE_URL
+          - PALVER_TOKEN

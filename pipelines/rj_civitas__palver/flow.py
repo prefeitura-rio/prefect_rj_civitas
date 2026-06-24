@@ -43,7 +43,7 @@ def rj_civitas__palver(
     write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"] = "WRITE_APPEND",
     llm_model: str = "gemini-2.5-flash",
     materialize_after_dump: bool = True,
-    mode: Literal["dev", "prod", "staging"] = "prod",
+    mode: Literal["dev", "prod", "staging"] = "staging",
     github_repo: str = "https://github.com/prefeitura-rio/pipelines_rj_civitas",
     required_secrets: tuple[str, ...] = (
         "PALVER_BASE_URL",
@@ -55,12 +55,7 @@ def rj_civitas__palver(
     if skip := skip_if_already_running():
         return skip
     
-    if mode == "dev":
-        load_dotenv()
-        environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/tmp/credentials.json"
-        log("INJECTED: GCP credentials from service account")
-    else:
-        inject_bd_credentials_task(environment="prod")
+    inject_bd_credentials_task(environment="prod")
 
     verify_secrets_task(secrets=required_secrets)
 
@@ -112,26 +107,26 @@ def rj_civitas__palver(
             write_disposition=write_disposition
         )
 
-        if materialize_after_dump:
-            dbt_select = dataset_id
-            materialize_after_dump_parameters: dict[str, Any] = {
-                "command": "build",
-                "select": dbt_select,
-                "send_discord_report": True,
-                "github_repo": github_repo,
-                "bigquery_project": project_id,
-                "target": "dev"
-            }
+    if materialize_after_dump:
+        dbt_select = dataset_id
+        materialize_after_dump_parameters: dict[str, Any] = {
+            "command": "build",
+            "select": dbt_select,
+            "send_discord_report": True,
+            "github_repo": github_repo,
+            "bigquery_project": project_id,
+            "target": "dev"
+        }
 
-            materialize_after_dump_future = run_deployment_task.submit(
-                name=config.run_dbt_deployment_name + "--" + mode,
-                parameters=materialize_after_dump_parameters,
-                timeout=None,
-                as_subflow=False,
-            )
-            materialize_after_dump_run = materialize_after_dump_future.result()
-            log(
-                f"Materialize after dump deployment run: {materialize_after_dump_run.id}",
-                level="info",
-            )
+        materialize_after_dump_future = run_deployment_task.submit(
+            name=config.run_dbt_deployment_name + "--" + mode,
+            parameters=materialize_after_dump_parameters,
+            timeout=None,
+            as_subflow=False,
+        )
+        materialize_after_dump_run = materialize_after_dump_future.result()
+        log(
+            f"Materialize after dump deployment run: {materialize_after_dump_run.id}",
+            level="info",
+        )
 

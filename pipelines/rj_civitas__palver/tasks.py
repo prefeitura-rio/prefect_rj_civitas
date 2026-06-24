@@ -256,9 +256,10 @@ def get_geolocation_task(
         if not geolocation:
             continue
 
-        doc["main_location_full_address"] = geolocation["full_address"]
-        doc["latitude"] = geolocation["latitude"]
-        doc["longitude"] = geolocation["longitude"]
+        doc["main_location_full_address"] = geolocation.get("full_address", "")
+        doc["city"] = geolocation.get("city", "")
+        doc["latitude"] = geolocation.get("latitude", "")
+        doc["longitude"] = geolocation.get("longitude", "")
 
     log(f"Got all geolocations from {source}")
     return data
