@@ -56,14 +56,9 @@ def rj_civitas__fogo_cruzado(
     if skip := skip_if_already_running():
         return skip
 
-    if mode == "dev":
-        dotenv.load_dotenv()
-        verify_secrets_task(secrets=required_secrets)
-        environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/tmp/credentials.json"
-        log("INJECTED: GCP credentials from service account")
-    else:
-        verify_secrets_task(secrets=required_secrets)
-        inject_bd_credentials_task(environment="prod")
+    verify_secrets_task(secrets=required_secrets)
+
+    inject_bd_credentials_task(environment="prod")
 
     resolved_start_date = resolve_start_date_task(days_offset=30)
 
