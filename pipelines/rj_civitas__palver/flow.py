@@ -58,7 +58,7 @@ def rj_civitas__palver(
 
     if skip := skip_if_already_running():
         return skip
-    
+
     inject_bd_credentials_task(environment="prod")
 
     verify_secrets_task(secrets=required_secrets)
@@ -99,7 +99,7 @@ def rj_civitas__palver(
         if not data:
             log(f"No data from {source} returned by the API.")
             continue
-        
+
         data = clean_text_task(source=source, data=data)
 
         data = enrich_with_tags_task(source=source, data=data)

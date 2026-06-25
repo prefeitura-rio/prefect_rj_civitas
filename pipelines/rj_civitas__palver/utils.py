@@ -139,7 +139,7 @@ async def get_data(
     token: str,
     source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"],
     start_date: str,
-    end_date: str,        
+    end_date: str,
     query: str,
     docs_per_page: int,
     max_concurrent: int = 5,
@@ -154,7 +154,7 @@ async def get_data(
 
     headers={
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json; charset=UTF-8" 
+            "Content-Type": "application/json; charset=UTF-8"
         }
     api_url = f"{host}/{source}/messages"
 
@@ -259,7 +259,7 @@ async def get_data(
 
 async def llm_extract_single_text(
         semaphore: asyncio.Semaphore,
-        client: genai.Client, 
+        client: genai.Client,
         model: str,
         source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"],
         text: str,
@@ -267,7 +267,7 @@ async def llm_extract_single_text(
     """Função assíncrona que analisa a relevância do texto e extrai suas informações geográficas"""
     text_type = "o post de rede social" if source in ("whatsapp", "twitter") else "a notícia"
     prompt = f"Analise {text_type} sobre segurança pública abaixo. Extraia as informações geográficas exigidas estritamente de acordo com o esquema JSON fornecido.\n\nTexto:\n{text}"
-    
+
     config = types.GenerateContentConfig(
         response_mime_type="application/json",
         response_schema=LLMGeoSchema.model_json_schema(),
@@ -293,13 +293,13 @@ async def llm_extract_single_text(
 
 
 async def llm_extract_relevance_and_locations_from_text(
-        client: genai.Client, 
+        client: genai.Client,
         model: str,
         source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"],
         data: List[Dict[str, Any]]):
     """Envelopa a chamada da API usando o semáforo para limitar acessos simultâneos"""
     print(f"Starting geographic data extraction of  {len(data)} texts from {source}...")
-    semaphore = asyncio.Semaphore(5) 
+    semaphore = asyncio.Semaphore(5)
 
     text_fields = get_source_text_fields(source)
     extractions = []
@@ -309,13 +309,13 @@ async def llm_extract_relevance_and_locations_from_text(
             value = doc.get(field, "")
             if value:
                 lines.append(value)
-        
+
         text = "\n".join(lines)
 
         if not text:
             extractions.append(asyncio.sleep(0, result=doc))
             continue
-    
+
         task = llm_extract_single_text(semaphore, client, model, source, text, doc)
         extractions.append(task)
 
@@ -323,17 +323,17 @@ async def llm_extract_relevance_and_locations_from_text(
     return results
 
 
-def get_geolocation(search_text: str, google_maps_api_key: str):        
+def get_geolocation(search_text: str, google_maps_api_key: str):
     client = googlemaps.Client(key=google_maps_api_key)
     try:
         geocode_result = client.geocode(
             address=search_text,
-            region="br",  
+            region="br",
         )
-        
+
         if not geocode_result:
             return None
-        
+
         result = None
         city = ""
         for partial_result in geocode_result:
@@ -366,10 +366,10 @@ def get_geolocation(search_text: str, google_maps_api_key: str):
                     )
                 )
                 break
-        
+
         if not result:
             return None
-        
+
         location = result["geometry"]["location"]
 
         details = {

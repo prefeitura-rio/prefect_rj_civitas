@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from google.cloud import bigquery
 from typing import Literal
 from pydantic import BaseModel, Field
@@ -69,7 +70,7 @@ def get_source_schema(source: Literal["news", "press", "whatsapp", "radio.medias
             bigquery.SchemaField(name="is_potentially_fraud", field_type="BOOLEAN", mode="NULLABLE"),
             bigquery.SchemaField(name="fraud_score", field_type="FLOAT", mode="NULLABLE"),
             bigquery.SchemaField(name="is_potentially_misleading", field_type="BOOLEAN", mode="NULLABLE"),
-            bigquery.SchemaField(name="misleading_score", field_type="FLOAT", mode="NULLABLE"),   
+            bigquery.SchemaField(name="misleading_score", field_type="FLOAT", mode="NULLABLE"),
             bigquery.SchemaField(name="tags", field_type="STRING", mode="REPEATED"),
             bigquery.SchemaField(name="is_relevant", field_type="BOOLEAN", mode="NULLABLE"),
             bigquery.SchemaField(name="locations", field_type="STRING", mode="REPEATED"),
@@ -122,7 +123,7 @@ def get_source_schema(source: Literal["news", "press", "whatsapp", "radio.medias
             bigquery.SchemaField(name="latitude", field_type="STRING", mode="NULLABLE"),
             bigquery.SchemaField(name="longitude", field_type="STRING", mode="NULLABLE"),
             bigquery.SchemaField(name="timestamp_insercao", field_type="timestamp", mode="NULLABLE"),
-        ], 
+        ],
         "twitter": [
             bigquery.SchemaField(name="id", field_type="STRING", mode="NULLABLE"),
             bigquery.SchemaField(name="chat_id", field_type="STRING", mode="NULLABLE"),
@@ -166,14 +167,14 @@ def get_source_parameters(source: Literal["news", "press", "whatsapp", "radio.me
         "sortOrder": "desc",
         "sortField": "datetime",
     }
-    
+
     parameters = {
         "news": {},
         "press": {},
         "whatsapp": {
             "type_label": "chat",
             "spam": "false",
-            # não funciona   "is_news_related": "true",   
+            # não funciona   "is_news_related": "true",
             # não funciona   "is_potencially_misleading": "false"
         },
         "radio.medias": {},
