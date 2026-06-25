@@ -9,9 +9,6 @@ Migrado de pipelines_rj_civitas Prefect 1.4 (fogo_cruzado/extract_load):
 - check_report_qty (ENDRUN+Skipped) → return Completed(name="Skipped") quando lista vazia.
 """
 
-
-import dotenv
-from os import environ
 from typing import Any, Literal
 
 from iplanrio.pipelines_utils.env import inject_bd_credentials_task
@@ -48,7 +45,8 @@ def rj_civitas__fogo_cruzado(
     required_secrets: tuple[str, ...] = (
         "FOGOCRUZADO_USERNAME",
         "FOGOCRUZADO_PASSWORD",
-#        "REDIS_HOST",
+        "REDIS_HOST",
+        "REDIS_PASSWORD"
     ),
 ) -> Any:
     rename_current_flow_run_task(new_name=f"{prefix}{dataset_id}_{table_id}")

@@ -72,3 +72,4 @@ deployments:
             - FOGOCRUZADO_USERNAME
             - FOGOCRUZADO_PASSWORD
             - REDIS_HOST
+            - REDIS_PASSWORD
