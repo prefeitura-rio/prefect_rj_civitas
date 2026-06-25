@@ -16,6 +16,10 @@ from iplanrio.pipelines_utils.logging import log
 from prefect import task
 
 from pipelines.rj_civitas__palver.utils import (
+    is_token_valid,
+    get_on_redis,
+    auth,
+    update_token_on_redis,
     get_data,
     get_geolocation,
     save_data_in_bq,
@@ -84,6 +88,43 @@ def resolve_start_date_task(start_date: str | None, minutes_offset: int) -> str:
     log(f"Resolved start_date dynamically: {resolved}", level="info")
     return resolved
     
+@task
+def get_palver_token_task(
+    palver_email: str, 
+    palver_password: str, 
+    redis_password:  str | None = None
+    ) -> str:
+    """Returns a valid auth token, using cache when possible."""
+    try:
+        token_data = get_on_redis(
+            dataset_id="palver",
+            name="api_token",
+            redis_password=redis_password,
+        )
+
+        if is_token_valid(token_data):
+            log("Using cached token", level="info")
+            return token_data["token"]
+
+        log("Token expired or invalid. Requesting new token...", level="info")
+    except Exception as e:
+        log(f"Error accessing Redis: {e}\nRequesting new token...", level="warning")
+    
+    try:
+        response = auth(palver_email, palver_password)
+        log("Token obtained successfully", level="info")
+    except Exception as e:
+        log(f"Error obtaining valid token: {e}", level="error")
+        raise
+
+    try:
+        update_token_on_redis(response, redis_password=None)
+        log("Token updated in Redis", level="info")
+    except Exception as e:
+        log(f"Failed to update token in Redis: {e}", level="warning")
+    
+    return response.json().get("token")
+    
 
 @task(retries=5, retry_delay_seconds=30)
 def fetch_messages_task(
@@ -91,7 +132,8 @@ def fetch_messages_task(
     end_date: str | None,
     docs_per_page: int,
     source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"],
-    query: str
+    query: str,
+    palver_token: str
 ) -> List[Dict[str, Any]]:
     """
     Task that fetches messages from the Palver API.
@@ -100,7 +142,6 @@ def fetch_messages_task(
     from environment variables. 
     """
     host = getenv_or_action("PALVER_BASE_URL", action="raise")
-    token = getenv_or_action("PALVER_TOKEN", action="raise")
 
     try:
         dt = datetime.strptime(end_date, "%Y-%m-%d %H:%M:%S")
@@ -117,7 +158,7 @@ def fetch_messages_task(
     data = asyncio.run(
         get_data(
             host=host,
-            token=token,
+            token=palver_token,
             source=source,
             start_date=start_date,
             end_date=end_date,

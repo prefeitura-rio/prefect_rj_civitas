@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from os import environ
 from typing import Literal, Any
 
-from iplanrio.pipelines_utils.env import inject_bd_credentials_task
+from iplanrio.pipelines_utils.env import inject_bd_credentials_task, getenv_or_action
 from iplanrio.pipelines_utils.prefect import log, rename_current_flow_run_task
 from prefect import flow
 from prefect_rj_civitas import (
@@ -18,6 +18,7 @@ from prefect_rj_civitas import (
 )
 
 from pipelines.rj_civitas__palver.tasks import (
+    get_palver_token_task,
     fetch_messages_task,
     load_to_table_task,
     resolve_start_date_task,
@@ -47,7 +48,10 @@ def rj_civitas__palver(
     github_repo: str = "https://github.com/prefeitura-rio/pipelines_rj_civitas",
     required_secrets: tuple[str, ...] = (
         "PALVER_BASE_URL",
-        "PALVER_TOKEN"
+        "PALVER_USERNAME",
+        "PALVER_PASSWORD",
+        "REDIS_HOST",
+        "REDIS_PASSWORD"
     )
 ):
     rename_current_flow_run_task(new_name=f"{write_disposition}_{dataset_id}_messages-{mode}")
@@ -58,6 +62,11 @@ def rj_civitas__palver(
     inject_bd_credentials_task(environment="prod")
 
     verify_secrets_task(secrets=required_secrets)
+
+    palver_email = getenv_or_action("PALVER_USERNAME", action="raise")
+    palver_password = getenv_or_action("PALVER_PASSWORD", action="raise")
+    redis_password = getenv_or_action("REDIS_PASSWORD", action="raise")
+    palver_token = get_palver_token_task(palver_email=palver_email, palver_password=palver_password, redis_password=redis_password)
 
     google_maps_api_key = environ["GOOGLE_MAPS_API_KEY"]
 
@@ -83,7 +92,8 @@ def rj_civitas__palver(
             end_date=end_date,
             docs_per_page=docs_per_page,
             source=source,
-            query=query
+            query=query,
+            palver_token=palver_token
         )
 
         if not data:

@@ -5,16 +5,20 @@ Helpers para a pipeline Palver.
 Inclui fetch assíncrono de ocorrências e escrita em BigQuery.
 """
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Literal, Optional
 
 import aiohttp
 import googlemaps
+import pandas as pd
 import pytz
+import requests
 import urllib3
+from redis_pal import RedisPal
 from google.cloud import bigquery
 from google import genai
 from google.genai import types
+from iplanrio.pipelines_utils.env import getenv_or_action
 from iplanrio.pipelines_utils.logging import log, log_mod
 
 from pipelines.rj_civitas__palver.schemas import get_source_parameters, get_source_text_fields, LLMGeoSchema
@@ -22,6 +26,112 @@ from pipelines.rj_civitas__palver.schemas import get_source_parameters, get_sour
 tz = pytz.timezone("America/Sao_Paulo")
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def get_redis_client(
+    host: str | None = None,
+    port: int = 6379,
+    db: int = 0,
+    password: str | None = None,
+) -> RedisPal:
+    """
+    Returns a Redis client.
+
+    Host must be provided either explicitly or via the REDIS_HOST env var.
+    """
+    host = host or getenv_or_action("REDIS_HOST", action="raise")
+    return RedisPal(host=host, port=port, db=db, password=password)
+
+
+def build_redis_key(
+    dataset_id: str,
+    name: str | None = None,
+    mode: Literal["dev", "prod"] = "prod",
+) -> str:
+    """Constructs a Redis key from dataset, table and optional name."""
+    key = dataset_id
+    if name:
+        key = f"{key}.{name}"
+    if mode == "dev":
+        key = f"{mode}.{key}"
+    return key
+
+
+def get_on_redis(
+    dataset_id: str,
+    name: str | None = None,
+    mode: Literal["dev", "prod"] = "prod",
+    redis_password: str | None = None,
+) -> Any:
+    """Retrieves a value from Redis based on dataset/table/name."""
+    redis_client = get_redis_client(password=redis_password)
+    key = build_redis_key(dataset_id, name, mode)
+    return redis_client.get(key)
+
+
+def save_on_redis(
+    data: Any,
+    dataset_id: str,
+    name: str | None = None,
+    mode: Literal["dev", "prod"] = "prod",
+    redis_password: str | None = None,
+) -> None:
+    """Saves a value to Redis based on dataset/table/name."""
+    redis_client = get_redis_client(password=redis_password)
+    key = build_redis_key(dataset_id, name, mode)
+    redis_client.set(key, data)
+
+
+def update_token_on_redis(data: requests.Response, redis_password: str | None = None) -> None:
+    """Updates the cached token in Redis with its expiration date."""
+    request_date_str: str = data.headers.get("date")
+    request_date_obj: datetime = pd.to_datetime(request_date_str)
+
+    expires_at: datetime = request_date_obj + timedelta(
+        seconds=data.json().get("expiry", {})
+    )
+    expires_at_str: str = expires_at.strftime("%Y-%m-%d %H:%M:%S")
+
+    payload: dict = data.json()
+    payload.update({"expiresAt": expires_at_str})
+
+    save_on_redis(
+        dataset_id="palver",
+        name="api_token",
+        data=payload,
+        redis_password=redis_password
+    )
+
+
+def is_token_valid(token_data: Optional[Dict[str, Any]]) -> bool:
+    """Checks if the API token cached in Redis is still valid."""
+    if not token_data:
+        return False
+
+    access_token = token_data.get("token")
+    expires_at_str = token_data.get("expiresAt")
+    if not all([access_token, expires_at_str]):
+        return False
+
+    try:
+        expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d %H:%M:%S").replace(
+            tzinfo=timezone.utc
+        )
+        return expires_at > datetime.now(tz=timezone.utc)
+    except ValueError as e:
+        raise Exception(f"Error parsing expiration date: {e}")
+
+
+def auth(email: str, password: str) -> requests.Response:
+    """Authenticates against the Fogo Cruzado API."""
+    host = getenv_or_action("PALVER_BASE_URL", action="raise")
+    endpoint = "/auth"
+    payload = {"email": email, "password": password}
+    headers = {"Content-Type": "application/json"}
+
+    response = requests.post(host + endpoint, json=payload, headers=headers, verify=False)
+    response.raise_for_status()
+    return response
 
 
 async def get_data(
