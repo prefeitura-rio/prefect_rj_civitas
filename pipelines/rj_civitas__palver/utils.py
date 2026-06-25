@@ -5,14 +5,11 @@ Helpers para a pipeline Palver.
 Inclui fetch assíncrono de ocorrências e escrita em BigQuery.
 """
 import asyncio
-import time
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
 import aiohttp
 import googlemaps
-import json
-import pandas as pd
 import pytz
 import urllib3
 from google.cloud import bigquery

@@ -48,42 +48,20 @@ deployments:
         image_pull_policy: Always
 
     schedules:
-    # Exemplo de schedule overwrite
     - interval: 300 # executa a cada 5 minutos
-      anchor_date: "2026-06-24T00:00:00" # Data de inicio do schedule em UTC
+      anchor_date: "2026-06-25T00:03:00" # Data de inicio do schedule em UTC
       timezone: America/Sao_Paulo
-      slug: 'palver_fresh_sources' # slug do schedule
-      parameters:
-        project_id: rj-civitas
-        dataset_id: palver
-        sources: 
-          - whatsapp
-          - news
-          - radio.medias
-          - television
-          - twitter
-        docs_per_page: 100
-        incremental: true
-        minutes_offset: 1440
-        query: "tiroteio~ OR assalt* OR tr?fic* OR mil?ci* OR furtou OR furtaram OR homicídio~ OR furtou OR furtaram OR feminicídio OR latrocínio"
-        write_disposition: WRITE_APPEND
-        materialize_after_dump: true
-        mode: prod
-        github_repo: https://github.com/prefeitura-rio/pipelines_rj_civitas
-        required_secrets:
-          - PALVER_BASE_URL
-          - PALVER_TOKEN
-        
-    # Exemplo de schedule incremental
-    - interval: 86400
-      anchor_date: "2026-06-24T03:04:00"
-      timezone: America/Sao_Paulo
-      slug: 'palver_press_daily'
+      slug: palver_every_five_minutes
       parameters:
         project_id: rj-civitas
         dataset_id: palver
         sources: 
           - press
+          - whatsapp
+          - news
+          - radio.medias
+          - television
+          - twitter
         docs_per_page: 100
         incremental: true
         minutes_offset: 1440

@@ -3,6 +3,7 @@ name = "rj_civitas__palver"
 version = "0.1.0"
 description = "Pipeline palver da secretaria civitas"
 dependencies = [
+    "aiohttp>=3.13.5",
     "googlemaps>=4.10.0",
     "prefect_rj_civitas",
 ]
