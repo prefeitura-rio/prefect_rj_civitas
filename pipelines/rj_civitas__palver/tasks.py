@@ -118,7 +118,7 @@ def get_palver_token_task(
         raise
 
     try:
-        update_token_on_redis(response, redis_password=None)
+        update_token_on_redis(response, redis_password=redis_password)
         log("Token updated in Redis", level="info")
     except Exception as e:
         log(f"Failed to update token in Redis: {e}", level="warning")
