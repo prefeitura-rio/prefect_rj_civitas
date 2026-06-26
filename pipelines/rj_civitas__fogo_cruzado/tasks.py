@@ -51,10 +51,11 @@ def fetch_occurrences_task(
     Reads `FOGOCRUZADO_USERNAME`, `FOGOCRUZADO_PASSWORD`
     from environment variables. Latitude/longitude are coerced to floats.
     """
-    email = getenv_or_action("FOGOCRUZADO_USERNAME", action="raise")
-    password = getenv_or_action("FOGOCRUZADO_PASSWORD", action="raise")
+    fc_email = getenv_or_action("FOGOCRUZADO_USERNAME", action="raise")
+    fc_password = getenv_or_action("FOGOCRUZADO_PASSWORD", action="raise")
+    redis_password = getenv_or_action("REDIS_PASSWORD", action="raise")
 
-    token = get_valid_token(email=email, password=password)
+    token = get_valid_token(email=fc_email, password=fc_password, redis_password=redis_password)
 
     log("Fetching data...", level="info")
     occurrences = asyncio.run(
