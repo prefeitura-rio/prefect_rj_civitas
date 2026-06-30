@@ -41,7 +41,7 @@ def rj_civitas__palver(
     start_date: str | None = None,
     end_date: str | None = None,
     minutes_offset: int = 1440,
-    query: str = "tiroteio~ OR assalt* OR tr?fic* OR mil?ci* OR furtou OR furtaram OR homicídio~ OR furtou OR furtaram OR feminicídio OR latrocínio",
+    query: str = "tiroteio~ OR assalt* OR tr?fic* OR mil?ci* OR furtou OR furtaram OR homicídio~ OR feminicídio OR latrocínio",
     write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"] = "WRITE_APPEND",
     llm_model: str = "gemini-2.5-flash",
     materialize_after_dump: bool = True,

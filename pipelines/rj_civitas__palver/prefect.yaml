@@ -65,7 +65,7 @@ deployments:
         docs_per_page: 100
         incremental: true
         minutes_offset: 1440
-        query: "tiroteio~ OR assalt* OR tr?fic* OR mil?ci* OR furtou OR furtaram OR homicídio~ OR furtou OR furtaram OR feminicídio OR latrocínio"
+        query: "tiroteio~ OR assalt* OR tr?fic* OR mil?ci* OR furtou OR furtaram OR homicídio~ OR feminicídio OR latrocínio"
         write_disposition: WRITE_APPEND
         materialize_after_dump: true
         mode: prod

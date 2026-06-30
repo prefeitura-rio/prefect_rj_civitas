@@ -144,13 +144,20 @@ def fetch_messages_task(
     """
     host = getenv_or_action("PALVER_BASE_URL", action="raise")
 
-    try:
-        dt = datetime.strptime(end_date, "%Y-%m-%d %H:%M:%S")
-        dt = dt.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
+    if end_date:
+        try:
+            dt = datetime.strptime(end_date, "%Y-%m-%d %H:%M:%S")
+            dt = dt.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
 
-        end_date = dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ")
-    except:
+            end_date = dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ")
+        except ValueError as e:
+            log(f"Value Error: end_date is in the wrong format. Expected: YYYY-MM-DD HH:mm:ss")
+            raise e
+
+    else:
         if source=="press":
+            # The Press source truncates timestamps to the day. Set the end date to the end
+            # of yesterday (UTC-3) to prevent today's data from being skipped by the incremental logic.
             end_date = datetime.now(tz=UTC).strftime("%Y-%m-%dT02:59:59Z")
         else:
             end_date = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
