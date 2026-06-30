@@ -210,27 +210,27 @@ def enrich_with_tags_task(
     brute_tags = [
     (
         "tiroteio",
-        r"\btiroteios?\b|\btroca de tiros\b|\bbalead[ao]s?\b|\bdispar(?:os?|ou|aram)\b"
+        r"tiroteios?|troca(?:\s|_)?de(?:\s|_)?tiros|balead[ao]s?|dispar(?:o|os|ou|aram)"
     ),
     (
         "assalto",
-        r"\bassalt(?:os?|as?|antes?|ados?|adas?|ou|aram)\b"
+        r"assalt(?:os?|as?|antes?|ados?|adas?|ou|aram)"
     ),
     (
         "homicídio",
-        r"\bassassin(?:atos?|ou|aram)\b|\bhomic[ií]d(?:ios?|as?)\b|\bmat(?:ou|aram)\b"
+        r"assassin(?:atos?|ou|aram)|homic[ií]d(?:ios?|as?)|feminic[ií]d(?:ios?)|latroc[ií]ni(?:os?)|\bmat(?:ou|aram)\b"
     ),
     (
         "roubo",
-        r"\broub(?:os?|as?|ou|aram|ar)\b|\bladr(?:ão|ões)\b|\bfurt(?:os?|ados?|adas?|ou|aram|ar)\b"
+        r"\broub(?:os?|as?|ou|aram|ar)\b|ladr(?:ão|ões)|furt(?:os?|ados?|adas?|ou|aram|ar)"
     ),
     (
         "milícia",
-        r"\bmil[ií]cias?\b|\bmilicianos?\b"
+        r"mil[ií]cias?|milicianos?"
     ),
     (
         "tráfico",
-        r"\btr[aá]fic[oa]s?\b|\btraficantes?\b|\bentorpecentes?\b"
+        r"tr[aá]fic[oa]s?|traficantes?|entorpecentes?|drogas"
     )
 ]
     compiled_tags = [(name, re.compile(pattern, re.IGNORECASE)) for name, pattern in brute_tags]
@@ -306,7 +306,7 @@ def get_geolocation_task(
             continue
 
         doc["main_location_full_address"] = geolocation.get("full_address", "")
-        doc["city"] = geolocation.get("city", "")
+        doc["main_location_city"] = geolocation.get("city", "")
         doc["latitude"] = geolocation.get("latitude", "")
         doc["longitude"] = geolocation.get("longitude", "")
 
