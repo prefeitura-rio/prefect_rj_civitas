@@ -51,7 +51,8 @@ def rj_civitas__palver(
         "PALVER_USERNAME",
         "PALVER_PASSWORD",
         "REDIS_HOST",
-        "REDIS_PASSWORD"
+        "REDIS_PASSWORD",
+        "GOOGLE_MAPS_API_KEY"
     )
 ):
     rename_current_flow_run_task(new_name=f"{write_disposition}_{dataset_id}_messages-{mode}")

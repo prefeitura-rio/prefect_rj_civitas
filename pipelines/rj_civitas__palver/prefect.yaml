@@ -72,4 +72,8 @@ deployments:
         github_repo: https://github.com/prefeitura-rio/pipelines_rj_civitas
         required_secrets:
           - PALVER_BASE_URL
-          - PALVER_TOKEN
+          - PALVER_USERNAME
+          - PALVER_PASSWORD
+          - REDIS_HOST
+          - REDIS_PASSWORD
+          - GOOGLE_MAPS_API_KEY
