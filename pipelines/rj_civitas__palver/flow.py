@@ -10,6 +10,7 @@ from typing import Literal, Any
 from iplanrio.pipelines_utils.env import inject_bd_credentials_task, getenv_or_action
 from iplanrio.pipelines_utils.prefect import log, rename_current_flow_run_task
 from prefect import flow
+from prefect.states import Completed
 from prefect_rj_civitas import (
     config,
     run_deployment_task,
@@ -76,6 +77,7 @@ def rj_civitas__palver(
     if mode in ("dev", "staging"):
         project_id = f"{project_id}-dev"
 
+    data_uploaded = False
     for source in sources:
         table_id = f"palver_{source.replace('.', '_')}_messages"
 
@@ -116,6 +118,13 @@ def rj_civitas__palver(
             source=source,
             data=data,
             write_disposition=write_disposition
+        )
+        data_uploaded = True
+
+    if not data_uploaded:
+        return Completed(
+            message="No data returned by the API, finishing the flow.",
+            name="Skipped",
         )
 
     if materialize_after_dump:

@@ -172,6 +172,7 @@ def fetch_messages_task(
     return data
 
 
+@task
 def clean_text_task(
     data: List[Dict[str, Any]],
     source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"]
