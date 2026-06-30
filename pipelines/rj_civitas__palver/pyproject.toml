@@ -1,0 +1,15 @@
+[project]
+name = "rj_civitas__palver"
+version = "0.1.0"
+description = "Pipeline palver da secretaria civitas"
+dependencies = [
+    "aiohttp>=3.13.5",
+    "googlemaps>=4.10.0",
+    "pandas>=3.0.2",
+    "prefect_rj_civitas",
+    "redis-pal>=1.0.0",
+    "requests>=2.33.1",
+]
+
+[tool.uv.sources]
+prefect_rj_civitas = { workspace = true }
