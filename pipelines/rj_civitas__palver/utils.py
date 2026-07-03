@@ -16,7 +16,6 @@ import pytz
 import requests
 import urllib3
 from redis_pal import RedisPal
-from google.api_core.exceptions import GoogleAPICallError, BadRequest
 from google.cloud import bigquery
 from google import genai
 from google.genai import types
@@ -331,7 +330,6 @@ def get_geolocation_from_cache(
         bq_geolocation_cache_table: str):
     local_cached_data = local_geolocation_cache.get(key, None)
     if local_cached_data:
-        local_cached_data["count"] += 1 # TODO: tirar antes de commit
         return local_cached_data["data"]
 
     client = bigquery.Client()
@@ -369,7 +367,6 @@ def set_geolocation_to_local_cache(key: str, value: dict, is_new: bool, local_ge
     local_geolocation_cache.setdefault(key, {})
     local_geolocation_cache[key]["data"] = value
     local_geolocation_cache[key]["isNew"] = is_new
-    local_geolocation_cache[key]["count"] = 1 # TODO: tirar antes de commit
     return
 
 def get_geolocation(

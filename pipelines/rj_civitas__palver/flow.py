@@ -135,7 +135,6 @@ def rj_civitas__palver(
             message="No data returned by the API, finishing the flow.",
             name="Skipped",
         )
-    log(local_geolocation_cache) # // TODO tirar antes do commit
     load_local_cache_to_bq_task(bq_geolocation_cache_table, local_geolocation_cache)
 
     if materialize_after_dump:
