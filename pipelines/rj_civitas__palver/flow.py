@@ -26,7 +26,8 @@ from pipelines.rj_civitas__palver.tasks import (
     clean_text_task,
     enrich_with_tags_task,
     llm_enrich_task,
-    get_geolocation_task
+    get_geolocation_task,
+    load_local_cache_to_bq_task
 )
 
 
@@ -77,6 +78,9 @@ def rj_civitas__palver(
     if mode in ("dev", "staging"):
         project_id = f"{project_id}-dev"
 
+    local_geolocation_cache = dict()
+    bq_geolocation_cache_table = f"{project_id}.{dataset_id}_staging.geolocation_cache"
+
     data_uploaded = False
     for source in sources:
         table_id = f"palver_{source.replace('.', '_')}_messages"
@@ -109,7 +113,12 @@ def rj_civitas__palver(
 
         data = llm_enrich_task(source=source, data=data, model=llm_model)
 
-        data = get_geolocation_task(source=source, data=data, google_maps_api_key=google_maps_api_key)
+        data = get_geolocation_task(
+            source=source,
+            data=data,
+            google_maps_api_key=google_maps_api_key,
+            local_geolocation_cache=local_geolocation_cache,
+            bq_geolocation_cache_table=bq_geolocation_cache_table)
 
         load_to_table_task(
             project_id=project_id,
@@ -126,6 +135,8 @@ def rj_civitas__palver(
             message="No data returned by the API, finishing the flow.",
             name="Skipped",
         )
+    log(local_geolocation_cache) # // TODO tirar antes do commit
+    load_local_cache_to_bq_task(bq_geolocation_cache_table, local_geolocation_cache)
 
     if materialize_after_dump:
         dbt_select = dataset_id

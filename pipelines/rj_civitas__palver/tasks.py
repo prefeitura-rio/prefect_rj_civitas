@@ -5,6 +5,7 @@ Tasks da pipeline Fogo Cruzado.
 import asyncio
 from datetime import datetime, timedelta, UTC
 from typing import Any, Dict, List, Literal
+import pytz
 from zoneinfo import ZoneInfo
 import os
 
@@ -28,6 +29,7 @@ from pipelines.rj_civitas__palver.utils import (
 )
 from pipelines.rj_civitas__palver.schemas import get_source_schema, get_source_text_fields
 
+tz = pytz.timezone("America/Sao_Paulo")
 
 @task
 def resolve_incremental_date_task(
@@ -290,6 +292,8 @@ def get_geolocation_task(
     source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter"],
     data: List[Dict[str, Any]],
     google_maps_api_key: str,
+    local_geolocation_cache: dict,
+    bq_geolocation_cache_table: str
 ) -> List[Dict[str, Any]]:
     """
     Task that fetches the geolocation of the main location from the Google Maps API.
@@ -300,7 +304,12 @@ def get_geolocation_task(
         if not main_location:
             continue
 
-        geolocation= get_geolocation(search_text=main_location, google_maps_api_key=google_maps_api_key)
+        geolocation= get_geolocation(
+            search_text=main_location,
+            google_maps_api_key=google_maps_api_key,
+            local_geolocation_cache=local_geolocation_cache,
+            bq_geolocation_cache_table=bq_geolocation_cache_table
+            )
         if not geolocation:
             continue
 
@@ -340,3 +349,38 @@ def load_to_table_task(
         source=source
     )
     log(f"{len(data)} occurrences written to {project_id}.{dataset_id}.{table_id}")
+
+@task(retries=5, retry_delay_seconds=30)
+def load_local_cache_to_bq_task(
+    bq_geolocation_cache_table: str,
+    local_geolocation_cache: dict
+) -> None:
+    """
+    Loads occurrences to a BigQuery table using the canonical schema.
+
+    In `dev`/`staging` mode the destination project is suffixed with `-dev`.
+    """
+    log(f"Writing local cache to {bq_geolocation_cache_table}")
+    client = bigquery.Client()
+    schema = [
+        bigquery.SchemaField("key", "STRING", mode="REQUIRED"),
+        bigquery.SchemaField("geolocation_details", "JSON",  mode="REQUIRED"),
+        bigquery.SchemaField("timestamp_insercao", "TIMESTAMP", mode="REQUIRED"),
+    ]
+
+    job_config = bigquery.LoadJobConfig(
+        schema=schema,
+        create_disposition=bigquery.CreateDisposition.CREATE_IF_NEEDED,
+        write_disposition="WRITE_APPEND",
+        clustering_fields=["key"],
+    )
+
+    timestamp_now = datetime.now(tz=tz).strftime("%Y-%m-%d %H:%M:%S")
+    data = [{"key": k, "geolocation_details": v["data"], "timestamp_insercao": timestamp_now} for k,v in local_geolocation_cache.items() if v.get("isNew")]
+
+    try:
+        job = client.load_table_from_json(data, bq_geolocation_cache_table, job_config=job_config)
+        job.result()
+    except Exception as e:
+        raise Exception(e)
+    log(f"{len(data)} cache registers written to {bq_geolocation_cache_table}")

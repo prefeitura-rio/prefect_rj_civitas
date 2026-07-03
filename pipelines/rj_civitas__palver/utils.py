@@ -5,6 +5,7 @@ Helpers para a pipeline Palver.
 Inclui fetch assíncrono de ocorrências e escrita em BigQuery.
 """
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Literal, Optional
 
@@ -15,6 +16,7 @@ import pytz
 import requests
 import urllib3
 from redis_pal import RedisPal
+from google.api_core.exceptions import GoogleAPICallError, BadRequest
 from google.cloud import bigquery
 from google import genai
 from google.genai import types
@@ -323,7 +325,63 @@ async def llm_extract_relevance_and_locations_from_text(
     return results
 
 
-def get_geolocation(search_text: str, google_maps_api_key: str):
+def get_geolocation_from_cache(
+        key: str,
+        local_geolocation_cache: dict,
+        bq_geolocation_cache_table: str):
+    local_cached_data = local_geolocation_cache.get(key, None)
+    if local_cached_data:
+        local_cached_data["count"] += 1 # TODO: tirar antes de commit
+        return local_cached_data["data"]
+
+    client = bigquery.Client()
+
+    query = f"""
+        SELECT
+            geolocation_details
+        FROM `{bq_geolocation_cache_table}`
+        WHERE key = @key
+        LIMIT 1
+    """
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("key", "STRING", key)
+        ]
+    )
+    try:
+        query_job = client.query(query, job_config=job_config)
+        result = query_job.result()
+
+        row = next(result, None)
+
+        if row is None:
+            return None
+    except Exception as error:
+        log(f"Problems while communicating with BigQuery cache table: {error}", level="warning")
+        return None
+
+    data = json.loads(row.geolocation_details) if isinstance(row.geolocation_details, str) else dict(row.geolocation_details)
+    set_geolocation_to_local_cache(key=key, value=data, is_new=False, local_geolocation_cache=local_geolocation_cache)
+    return data
+
+def set_geolocation_to_local_cache(key: str, value: dict, is_new: bool, local_geolocation_cache: dict):
+    local_geolocation_cache.setdefault(key, {})
+    local_geolocation_cache[key]["data"] = value
+    local_geolocation_cache[key]["isNew"] = is_new
+    local_geolocation_cache[key]["count"] = 1 # TODO: tirar antes de commit
+    return
+
+def get_geolocation(
+        search_text: str,
+        google_maps_api_key: str,
+        local_geolocation_cache: dict,
+        bq_geolocation_cache_table: str):
+    cache_key = " ".join(search_text.lower().split())
+    cached = get_geolocation_from_cache(cache_key, local_geolocation_cache, bq_geolocation_cache_table)
+    if cached:
+        return cached
+
     client = googlemaps.Client(key=google_maps_api_key)
     try:
         geocode_result = client.geocode(
@@ -378,6 +436,8 @@ def get_geolocation(search_text: str, google_maps_api_key: str):
             "latitude": location["lat"],
             "longitude": location["lng"],
             }
+
+        set_geolocation_to_local_cache(key=cache_key, value=details, is_new=True, local_geolocation_cache=local_geolocation_cache)
         return details
 
     except Exception as e:
