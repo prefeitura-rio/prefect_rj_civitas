@@ -37,7 +37,6 @@ def resolve_incremental_date_task(
     ):
     log(f"Getting the last charge datetime from {table_id}")
     try:
-        client = bigquery.Client()
         table_full_name = f"{project_id}.{dataset_id}.{table_id}"
 
         client = bigquery.Client(project=project_id)

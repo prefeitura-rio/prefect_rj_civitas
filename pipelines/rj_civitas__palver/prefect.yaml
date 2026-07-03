@@ -70,6 +70,9 @@ deployments:
         materialize_after_dump: true
         mode: prod
         github_repo: https://github.com/prefeitura-rio/pipelines_rj_civitas
+        gcs_buckets:
+            prod: "rj-civitas_dbt"
+            dev: "rj-civitas-dev_dbt"
         required_secrets:
           - PALVER_BASE_URL
           - PALVER_USERNAME

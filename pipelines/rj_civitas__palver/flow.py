@@ -3,7 +3,6 @@
 CIVITAS — Extração e carga no datalake dos dados da Palver (Prefect 3).
 """
 
-from dotenv import load_dotenv
 from os import environ
 from typing import Literal, Any
 
@@ -47,6 +46,7 @@ def rj_civitas__palver(
     materialize_after_dump: bool = True,
     mode: Literal["dev", "prod", "staging"] = "staging",
     github_repo: str = "https://github.com/prefeitura-rio/pipelines_rj_civitas",
+    gcs_buckets: dict[str, str] | None = None,
     required_secrets: tuple[str, ...] = (
         "PALVER_BASE_URL",
         "PALVER_USERNAME",
@@ -135,7 +135,8 @@ def rj_civitas__palver(
             "send_discord_report": True,
             "github_repo": github_repo,
             "bigquery_project": project_id,
-            "target": "dev"
+            "target": "dev",
+            "gcs_buckets": gcs_buckets
         }
 
         materialize_after_dump_future = run_deployment_task.submit(
