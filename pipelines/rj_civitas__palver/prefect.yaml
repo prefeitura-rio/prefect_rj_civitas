@@ -1,0 +1,79 @@
+name: rj_civitas__palver
+prefect-version: 3.4.3
+
+build:
+  - prefect.deployments.steps.run_shell_script:
+      id: get-commit-hash
+      script: git rev-parse --short HEAD
+      stream_output: false
+  - prefect_docker.deployments.steps.build_docker_image:
+      id: build-image
+      requires: prefect-docker>=0.6.5
+      image_name: ghcr.io/prefeitura-rio/prefect_rj_civitas/deployments
+      tag: "rj_civitas__palver-{{ get-commit-hash.stdout }}"
+      dockerfile: pipelines/rj_civitas__palver/Dockerfile
+
+push:
+  - prefect_docker.deployments.steps.push_docker_image:
+      requires: prefect-docker>=0.6.5
+      image_name: "{{ build-image.image_name }}"
+      tag: "{{ build-image.tag }}"
+
+pull:
+  - prefect.deployments.steps.set_working_directory:
+      directory: /opt/prefect/prefect_rj_civitas
+
+deployments:
+  - name: rj-civitas--palver--staging
+    version: "{{ build-image.tag }}"
+    entrypoint: pipelines/rj_civitas__palver/flow.py:rj_civitas__palver
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables:
+        image: "{{ build-image.image_name }}:{{ build-image.tag }}"
+        command: uv run --package rj_civitas__palver -- prefect flow-run execute
+        secretName: prefect-jobs-secrets-staging  #pragma: allowlist secret
+        image_pull_policy: Always
+  - name: rj-civitas--palver--prod
+    version: "{{ get-commit-hash.stdout }}"
+    entrypoint: pipelines/rj_civitas__palver/flow.py:rj_civitas__palver
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables:
+        image: "{{ build-image.image_name }}:{{ build-image.tag }}"
+        command: uv run --package rj_civitas__palver -- prefect flow-run execute
+        secretName: prefect-jobs-secrets  #pragma: allowlist secret
+        image_pull_policy: Always
+
+    schedules:
+    - interval: 300 # executa a cada 5 minutos
+      anchor_date: "2026-06-25T00:03:00" # Data de inicio do schedule em UTC
+      timezone: America/Sao_Paulo
+      slug: palver_every_five_minutes
+      parameters:
+        project_id: rj-civitas
+        dataset_id: palver
+        sources:
+          - press
+          - whatsapp
+          - news
+          - radio.medias
+          - television
+          - twitter
+        docs_per_page: 100
+        incremental: true
+        minutes_offset: 1440
+        query: "tiroteio~ OR assalt* OR tr?fic* OR mil?ci* OR furtou OR furtaram OR homicídio~ OR feminicídio OR latrocínio"
+        write_disposition: WRITE_APPEND
+        materialize_after_dump: true
+        mode: prod
+        github_repo: https://github.com/prefeitura-rio/pipelines_rj_civitas
+        required_secrets:
+          - PALVER_BASE_URL
+          - PALVER_USERNAME
+          - PALVER_PASSWORD
+          - REDIS_HOST
+          - REDIS_PASSWORD
+          - GOOGLE_MAPS_API_KEY
