@@ -369,6 +369,16 @@ def set_geolocation_to_local_cache(key: str, value: dict, is_new: bool, local_ge
     local_geolocation_cache[key]["isNew"] = is_new
     return
 
+def get_address_component(address_components, component_types, use_short_name=False):
+    if isinstance(component_types, str):
+        component_types = [component_types]
+
+    for component in address_components:
+        if any(component_type in component["types"] for component_type in component_types):
+            return component["short_name"] if use_short_name else component["long_name"]
+
+    return ""
+
 def get_geolocation(
         search_text: str,
         google_maps_api_key: str,
@@ -392,34 +402,27 @@ def get_geolocation(
         result = None
         city = ""
         for partial_result in geocode_result:
-            state = next(
-                (
-                    c["short_name"]
-                    for c in partial_result["address_components"]
-                    if "administrative_area_level_1" in c["types"]
-                ),
-                None,
-            )
+            state = get_address_component(
+                    partial_result["address_components"],
+                    "administrative_area_level_1",
+                    use_short_name=True,
+                )
             if state == "RJ":
                 result = partial_result
+                components = result["address_components"]
+
                 city = (
-                    next(
-                        (
-                            c["long_name"]
-                            for c in result["address_components"]
-                            if "locality" in c["types"]
-                        ),
-                        None,
-                    )
-                    or next(
-                        (
-                            c["long_name"]
-                            for c in result["address_components"]
-                            if "administrative_area_level_2" in c["types"]
-                        ),
-                        "",
+                    get_address_component(components, ["locality", "administrative_area_level_2"])
+                )
+
+                neighborhood = (
+                    get_address_component(
+                        components,
+                        ["sublocality_level_1", "sublocality", "neighborhood"]
                     )
                 )
+
+                street = get_address_component(components, "route")
                 break
 
         if not result:
@@ -430,6 +433,8 @@ def get_geolocation(
         details = {
             "full_address": result["formatted_address"],
             "city": city,
+            "neighborhood": neighborhood,
+            "street": street,
             "latitude": location["lat"],
             "longitude": location["lng"],
             }
@@ -461,6 +466,9 @@ def save_data_in_bq(
         ignore_unknown_values=True,
         create_disposition=bigquery.CreateDisposition.CREATE_IF_NEEDED,
         write_disposition=write_disposition,
+        schema_update_options=[
+        bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
+        ],
         time_partitioning=bigquery.TimePartitioning(
             type_=bigquery.TimePartitioningType.MONTH,
             field=partition_field,

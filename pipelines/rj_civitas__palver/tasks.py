@@ -315,6 +315,8 @@ def get_geolocation_task(
 
         doc["main_location_full_address"] = geolocation.get("full_address", "")
         doc["main_location_city"] = geolocation.get("city", "")
+        doc["main_location_neighborhood"] = geolocation.get("neighborhood", "")
+        doc["main_location_street"] = geolocation.get("street", "")
         doc["latitude"] = geolocation.get("latitude", "")
         doc["longitude"] = geolocation.get("longitude", "")
 
