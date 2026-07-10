@@ -5,6 +5,7 @@ Helpers para a pipeline Palver.
 Inclui fetch assíncrono de ocorrências e escrita em BigQuery.
 """
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Literal, Optional
 
@@ -323,7 +324,71 @@ async def llm_extract_relevance_and_locations_from_text(
     return results
 
 
-def get_geolocation(search_text: str, google_maps_api_key: str):
+def get_geolocation_from_cache(
+        key: str,
+        local_geolocation_cache: dict,
+        bq_geolocation_cache_table: str):
+    local_cached_data = local_geolocation_cache.get(key, None)
+    if local_cached_data:
+        return local_cached_data["data"]
+
+    client = bigquery.Client()
+
+    query = f"""
+        SELECT
+            geolocation_details
+        FROM `{bq_geolocation_cache_table}`
+        WHERE key = @key
+        LIMIT 1
+    """
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("key", "STRING", key)
+        ]
+    )
+    try:
+        query_job = client.query(query, job_config=job_config)
+        result = query_job.result()
+
+        row = next(result, None)
+
+        if row is None:
+            return None
+    except Exception as error:
+        log(f"Problems while communicating with BigQuery cache table: {error}", level="warning")
+        return None
+
+    data = json.loads(row.geolocation_details) if isinstance(row.geolocation_details, str) else dict(row.geolocation_details)
+    set_geolocation_to_local_cache(key=key, value=data, is_new=False, local_geolocation_cache=local_geolocation_cache)
+    return data
+
+def set_geolocation_to_local_cache(key: str, value: dict, is_new: bool, local_geolocation_cache: dict):
+    local_geolocation_cache.setdefault(key, {})
+    local_geolocation_cache[key]["data"] = value
+    local_geolocation_cache[key]["isNew"] = is_new
+    return
+
+def get_address_component(address_components, component_types, use_short_name=False):
+    if isinstance(component_types, str):
+        component_types = [component_types]
+
+    for component in address_components:
+        if any(component_type in component["types"] for component_type in component_types):
+            return component["short_name"] if use_short_name else component["long_name"]
+
+    return ""
+
+def get_geolocation(
+        search_text: str,
+        google_maps_api_key: str,
+        local_geolocation_cache: dict,
+        bq_geolocation_cache_table: str):
+    cache_key = " ".join(search_text.lower().split())
+    cached = get_geolocation_from_cache(cache_key, local_geolocation_cache, bq_geolocation_cache_table)
+    if cached:
+        return cached
+
     client = googlemaps.Client(key=google_maps_api_key)
     try:
         geocode_result = client.geocode(
@@ -337,34 +402,27 @@ def get_geolocation(search_text: str, google_maps_api_key: str):
         result = None
         city = ""
         for partial_result in geocode_result:
-            state = next(
-                (
-                    c["short_name"]
-                    for c in partial_result["address_components"]
-                    if "administrative_area_level_1" in c["types"]
-                ),
-                None,
-            )
+            state = get_address_component(
+                    partial_result["address_components"],
+                    "administrative_area_level_1",
+                    use_short_name=True,
+                )
             if state == "RJ":
                 result = partial_result
+                components = result["address_components"]
+
                 city = (
-                    next(
-                        (
-                            c["long_name"]
-                            for c in result["address_components"]
-                            if "locality" in c["types"]
-                        ),
-                        None,
-                    )
-                    or next(
-                        (
-                            c["long_name"]
-                            for c in result["address_components"]
-                            if "administrative_area_level_2" in c["types"]
-                        ),
-                        "",
+                    get_address_component(components, ["locality", "administrative_area_level_2"])
+                )
+
+                neighborhood = (
+                    get_address_component(
+                        components,
+                        ["sublocality_level_1", "sublocality", "neighborhood"]
                     )
                 )
+
+                street = get_address_component(components, "route")
                 break
 
         if not result:
@@ -375,9 +433,13 @@ def get_geolocation(search_text: str, google_maps_api_key: str):
         details = {
             "full_address": result["formatted_address"],
             "city": city,
+            "neighborhood": neighborhood,
+            "street": street,
             "latitude": location["lat"],
             "longitude": location["lng"],
             }
+
+        set_geolocation_to_local_cache(key=cache_key, value=details, is_new=True, local_geolocation_cache=local_geolocation_cache)
         return details
 
     except Exception as e:
@@ -404,6 +466,9 @@ def save_data_in_bq(
         ignore_unknown_values=True,
         create_disposition=bigquery.CreateDisposition.CREATE_IF_NEEDED,
         write_disposition=write_disposition,
+        schema_update_options=[
+        bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
+        ],
         time_partitioning=bigquery.TimePartitioning(
             type_=bigquery.TimePartitioningType.MONTH,
             field=partition_field,
