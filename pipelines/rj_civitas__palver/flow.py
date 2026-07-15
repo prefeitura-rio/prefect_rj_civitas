@@ -45,6 +45,7 @@ def rj_civitas__palver(
     write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"] = "WRITE_APPEND",
     llm_model: str = "gemini-2.5-flash",
     materialize_after_dump: bool = True,
+    materialize_reports_after_dump: bool = True,
     mode: Literal["dev", "prod", "staging"] = "staging",
     github_repo: str = "https://github.com/prefeitura-rio/pipelines_rj_civitas",
     gcs_buckets: dict[str, str] | None = None,
@@ -81,7 +82,7 @@ def rj_civitas__palver(
     local_geolocation_cache = dict()
     bq_geolocation_cache_table = f"{project_id}.{dataset_id}_staging.geolocation_cache"
 
-    data_uploaded = False
+    sources_uploaded = []
     for source in sources:
         table_id = f"palver_{source.replace('.', '_')}_messages"
 
@@ -128,9 +129,9 @@ def rj_civitas__palver(
             data=data,
             write_disposition=write_disposition
         )
-        data_uploaded = True
+        sources_uploaded.append(source)
 
-    if not data_uploaded:
+    if not sources_uploaded:
         return Completed(
             message="No data returned by the API, finishing the flow.",
             name="Skipped",
@@ -139,6 +140,9 @@ def rj_civitas__palver(
 
     if materialize_after_dump:
         dbt_select = dataset_id
+        if materialize_reports_after_dump:
+            for s in sources_uploaded:
+                dbt_select += f' reports_{s.replace('.', '_')}'
         materialize_after_dump_parameters: dict[str, Any] = {
             "command": "build",
             "select": dbt_select,
