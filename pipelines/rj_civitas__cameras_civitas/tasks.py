@@ -2,7 +2,7 @@
 """
 Tasks da pipeline cameras_civitas.
 """
-import requests
+import httpx
 from datetime import datetime
 from typing import Any, Dict, List, Literal
 import pytz
@@ -24,12 +24,9 @@ def get_smart_token_task(
     endpoint = "/auth/login"
 
     headers = {
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-    "Origin": "http://smartrackcloud.com.br",
-    "Referer": "http://smartrackcloud.com.br/login",
-    "Content-Type": "application/json",
-    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept": "application/json, text/plain, */*"
+        "Content-Type": "application/json",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept": "application/json, text/plain, */*"
     }
 
     body = {
@@ -38,7 +35,7 @@ def get_smart_token_task(
     }
 
     try:
-        response = requests.post(url=smart_url + endpoint, headers=headers, json=body)
+        response = httpx.post(url=smart_url + endpoint, headers=headers, json=body)
 
         response.raise_for_status()
         log("Token obtained successfully", level="info")
@@ -63,13 +60,10 @@ def fetch_cameras_task(
     endpoint = "/queries/run"
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {smart_token}",
-        "Origin": "http://smartrackcloud.com.br",
-        "Referer": "http://smartrackcloud.com.br/consultas",
+        "Authorization": f"Bearer {smart_token}"
     }
 
     body = {
@@ -126,7 +120,7 @@ def fetch_cameras_task(
 
     log(f"Fetching data from SMART", level="info")
     try:
-        response = requests.post(url=smart_url + endpoint, headers=headers, json=body)
+        response = httpx.post(url=smart_url + endpoint, headers=headers, json=body)
 
         response.raise_for_status()
         log("Data obtained successfully. Normalizing column names...", level="info")
