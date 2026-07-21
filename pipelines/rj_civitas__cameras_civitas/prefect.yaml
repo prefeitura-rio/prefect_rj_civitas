@@ -55,3 +55,6 @@ deployments:
       parameters:
         materialize_after_dump: true
         mode: prod
+        gcs_buckets:
+            prod: "rj-civitas_dbt"
+            dev: "rj-civitas-dev_dbt"
