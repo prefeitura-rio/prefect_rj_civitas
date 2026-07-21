@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Tasks da pipeline Fogo Cruzado.
+Tasks da pipeline Palver.
 """
 import asyncio
 from datetime import datetime, timedelta, UTC
