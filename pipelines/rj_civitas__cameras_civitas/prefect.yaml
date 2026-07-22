@@ -25,6 +25,7 @@ pull:
 
 deployments:
   - name: rj-civitas--cameras_civitas--staging
+    tags: [staging]
     version: "{{ build-image.tag }}"
     entrypoint: pipelines/rj_civitas__cameras_civitas/flow.py:rj_civitas__cameras_civitas
     work_pool:
@@ -36,6 +37,7 @@ deployments:
         secretName: prefect-jobs-secrets-staging # pragma: allowlist secret
         image_pull_policy: Always
   - name: rj-civitas--cameras_civitas--prod
+    tags: [prod]
     version: "{{ get-commit-hash.stdout }}"
     entrypoint: pipelines/rj_civitas__cameras_civitas/flow.py:rj_civitas__cameras_civitas
     work_pool:
@@ -49,7 +51,7 @@ deployments:
 
     schedules:
     - interval: 86400 # executa a cada 24h
-      anchor_date: "2026-07-17T00:03:00"
+      anchor_date: "2026-07-17T00:00:00-03:00"
       timezone: America/Sao_Paulo
       slug: daily
       parameters:
