@@ -27,7 +27,7 @@ from pipelines.rj_civitas__cameras_civitas.tasks import (
 def rj_civitas__cameras_civitas(
     project_id: str = "rj-civitas",
     dataset_id: str = "cerco_digital",
-    table_id: str = "cameras_civitas_staging",
+    table_id: str = "cameras_civitas",
     dbt_select: str = "cameras_civitas cameras",
     materialize_after_dump: bool = False,
     mode: Literal["dev", "prod", "staging"] = "staging",
@@ -39,7 +39,7 @@ def rj_civitas__cameras_civitas(
         "SMART_URL"
     )
 ):
-    rename_current_flow_run_task(new_name=table_id)
+    rename_current_flow_run_task(new_name=f"{table_id}-{mode}")
 
     if skip := skip_if_already_running():
         return skip

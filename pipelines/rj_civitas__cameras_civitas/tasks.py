@@ -14,7 +14,7 @@ from prefect import task
 
 tz = pytz.timezone("America/Sao_Paulo")
 
-@task
+@task(retries=3, retry_delay_seconds=30)
 def get_smart_token_task(
     smart_url: str,
     smart_email: str,
@@ -46,7 +46,7 @@ def get_smart_token_task(
         raise
 
 
-@task(retries=3, retry_delay_seconds=60)
+@task(retries=3, retry_delay_seconds=30)
 def fetch_cameras_task(
     smart_url: str,
     smart_token: str
