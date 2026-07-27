@@ -76,13 +76,14 @@ def rj_civitas__cameras_civitas(
         )
 
     if materialize_after_dump:
+        dbt_target = "dev" if mode == "prod" else "staging"
         materialize_after_dump_parameters: dict[str, Any] = {
             "command": "build",
             "select": dbt_select,
             "send_discord_report": True,
             "github_repo": github_repo,
             "bigquery_project": project_id,
-            "target": "dev",
+            "target": dbt_target,
             "gcs_buckets": gcs_buckets
         }
 

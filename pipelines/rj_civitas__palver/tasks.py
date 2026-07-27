@@ -16,7 +16,9 @@ from google.cloud import bigquery
 from iplanrio.pipelines_utils.env import getenv_or_action
 from iplanrio.pipelines_utils.logging import log
 from prefect import task
-
+from prefect_rj_civitas import (
+    save_data_in_bq_table
+)
 from pipelines.rj_civitas__palver.utils import (
     is_token_valid,
     get_on_redis,
@@ -24,7 +26,6 @@ from pipelines.rj_civitas__palver.utils import (
     update_token_on_redis,
     get_data,
     get_geolocation,
-    save_data_in_bq,
     llm_extract_relevance_and_locations_from_text
 )
 from pipelines.rj_civitas__palver.schemas import get_source_schema, get_source_text_fields
@@ -341,15 +342,21 @@ def load_to_table_task(
     log(f"Writing occurrences to {project_id}.{dataset_id}.{table_id}")
 
     schema = get_source_schema(source)
-    save_data_in_bq(
-        project_id=project_id,
-        dataset_id=dataset_id,
-        table_id=table_id,
-        schema=schema,
-        json_data=data,
-        write_disposition=write_disposition,
-        source=source
-    )
+    partition_field = "c_processed_at" if source=="press" else "datetime"
+    save_data_in_bq_table(
+            project_id=project_id,
+            dataset_id=dataset_id,
+            table_id=table_id,
+            schema=schema,
+            data=data,
+            write_disposition=write_disposition,
+            partition_field=partition_field,
+            partition_granularity="MONTH",
+            clustering_fields=["id"],
+            ignore_unknown_values=True,
+            allow_field_addition=True,
+            insert_timestamp_field="timestamp_insercao"
+        )
     log(f"{len(data)} occurrences written to {project_id}.{dataset_id}.{table_id}")
 
 @task(retries=5, retry_delay_seconds=30)

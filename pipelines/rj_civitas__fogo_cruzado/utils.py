@@ -14,7 +14,6 @@ import pandas as pd
 import pytz
 import requests
 import urllib3
-from google.cloud import bigquery
 from iplanrio.pipelines_utils.env import getenv_or_action
 from iplanrio.pipelines_utils.logging import log, log_mod
 from redis_pal import RedisPal
@@ -166,7 +165,7 @@ def get_valid_token(email: str, password: str, redis_password: str | None = None
         log("Token expired or invalid.", level="info")
     except Exception as e:
         log(f"Error accessing Redis: {e}", level="warning")
-    
+
     try:
         log("Requesting new token...", level="info")
         response = auth(email, password)
@@ -174,7 +173,7 @@ def get_valid_token(email: str, password: str, redis_password: str | None = None
     except Exception as e:
         log(f"Error obtaining valid token: {e}", level="error")
         raise
-    
+
     try:
         update_token_on_redis(response, redis_password=redis_password)
         log("Token updated in Redis", level="info")
@@ -303,35 +302,3 @@ async def get_occurrences(
             level="info",
         )
         return occurrences
-
-
-def save_data_in_bq(
-    project_id: str,
-    dataset_id: str,
-    table_id: str,
-    schema: List[bigquery.SchemaField],
-    json_data: List[Dict[str, Any]],
-    write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"] = "WRITE_APPEND",
-) -> None:
-    """Saves a list of dictionaries to a BigQuery table partitioned monthly."""
-    client = bigquery.Client()
-    table_full_name = f"{project_id}.{dataset_id}.{table_id}"
-
-    job_config = bigquery.LoadJobConfig(
-        schema=schema,
-        write_disposition=write_disposition,
-        time_partitioning=bigquery.TimePartitioning(
-            type_=bigquery.TimePartitioningType.MONTH,
-            field="timestamp_insercao",
-        ),
-        clustering_fields=["timestamp_insercao"],
-    )
-
-    timestamp_now = datetime.now(tz=tz).strftime("%Y-%m-%d %H:%M:%S")
-    json_data = [{**row, "timestamp_insercao": timestamp_now} for row in json_data]
-
-    try:
-        job = client.load_table_from_json(json_data, table_full_name, job_config=job_config)
-        job.result()
-    except Exception as e:
-        raise Exception(e)
