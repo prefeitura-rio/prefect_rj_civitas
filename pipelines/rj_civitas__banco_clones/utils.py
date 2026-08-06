@@ -107,6 +107,8 @@ def get_plates_readings(
             datahora,
             empresa,
             sentido,
+            bairro,
+            localidade,
             velocidade,
             camera_latitude,
             camera_longitude,
@@ -134,6 +136,8 @@ def get_plates_readings(
                     datahora,
                     empresa,
                     sentido,
+                    bairro,
+                    localidade,
                     velocidade,
                     camera_latitude,
                     camera_longitude,
@@ -228,6 +232,8 @@ def get_plates_readings(
                         "latitude": reading["camera_latitude"],
                         "longitude": reading["camera_longitude"],
                         "sentido": reading["sentido"],
+                        "bairro": reading["bairro"],
+                        "localidade": reading["localidade"],
                         "velocidade": reading["velocidade"],
                         "id_ponto_coleta": reading["id_ponto_coleta"],
                         "camera_numero": reading["camera_numero"]
@@ -265,8 +271,10 @@ def separate_suspect_pairs_into_tracks(
     for leitura in leituras:
         trilha_leitura = suspeitos_trilhas.get(leitura["id"])
         if trilha_leitura == 'A':
+            leitura["is_suspect"] = True
             trilha_a.append(leitura)
         elif trilha_leitura == 'B':
+            leitura["is_suspect"] = True
             trilha_b.append(leitura)
 
     return trilha_a, trilha_b
