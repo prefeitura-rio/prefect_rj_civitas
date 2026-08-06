@@ -16,7 +16,7 @@ from prefect_rj_civitas import (
     verify_secrets_task,
 )
 
-from pipelines.rj_civitas__banco_clones.tasks import get_tracks_task
+from pipelines.rj_civitas__banco_clones.tasks import get_readings_task, get_tracks_task
 
 
 @flow(log_prints=True)
@@ -26,6 +26,7 @@ def rj_civitas__banco_clones(
     readings_dataset_id = "cerco_digital",
     readings_table_id: str = "vw_all_readings",
     banco_clones_table_id: str = "banco_clones_dia",
+    pares_suspeitos_table_id: str = "pares_suspeitos",
     auditoria_table_id: str = "auditoria_clones_dia",
     dbt_select: str = "banco_clones_staging banco_clones",
     mode: Literal["dev", "prod", "staging"] = "staging",
@@ -82,18 +83,22 @@ def rj_civitas__banco_clones(
     readings_full_table_id = f"{project_id}.{readings_dataset_id}.{readings_table_id}"
     auditoria_full_table_id = f"{project_id}.{clones_dataset_id}.{auditoria_table_id}"
     banco_clones_full_table_id = f"{project_id}.{clones_dataset_id}.{banco_clones_table_id}"
-    plate_tracks_day = get_tracks_task(
+    pares_suspeitos_full_table_id = f"{project_id}.{clones_dataset_id}_staging.{pares_suspeitos_table_id}"
+    plate_readings_day = get_readings_task(
         start_date=start_date,
         readings_full_table_id=readings_full_table_id,
         banco_clones_full_table_id=banco_clones_full_table_id,
-        auditoria_full_table_id=auditoria_full_table_id
+        auditoria_full_table_id=auditoria_full_table_id,
+        pares_suspeitos_table_id=pares_suspeitos_full_table_id
     )
 
-    if not plate_tracks_day:
+    if not plate_readings_day:
         return Completed(
                 message="No fresh clone suspects detected, finishing the flow.",
                 name="Skipped",
             )
+
+    plate_tracks_day = get_tracks_task()
 
     upload_trilhas_to_audit_table_task(
         project_id=project_id,
