@@ -98,7 +98,7 @@ def rj_civitas__banco_clones(
                 name="Skipped",
             )
 
-    plate_tracks_day = get_tracks_task()
+    plate_tracks_day = get_tracks_task(plate_readings_day)
 
     upload_trilhas_to_audit_table_task(
         project_id=project_id,
