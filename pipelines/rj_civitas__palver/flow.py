@@ -48,7 +48,10 @@ def rj_civitas__palver(
     materialize_reports_after_dump: bool = True,
     mode: Literal["dev", "prod", "staging"] = "staging",
     github_repo: str = "https://github.com/prefeitura-rio/pipelines_rj_civitas",
-    gcs_buckets: dict[str, str] | None = None,
+    gcs_buckets: dict[str, str] | None = {
+        "prod": "rj-civitas_dbt",
+        "dev": "rj-civitas-dev_dbt"
+    },
     required_secrets: tuple[str, ...] = (
         "PALVER_BASE_URL",
         "PALVER_USERNAME",
@@ -139,6 +142,7 @@ def rj_civitas__palver(
     load_local_cache_to_bq_task(bq_geolocation_cache_table, local_geolocation_cache)
 
     if materialize_after_dump:
+        dbt_target = "dev" if mode == "prod" else "staging"
         dbt_select = dataset_id
         if materialize_reports_after_dump:
             for s in sources_uploaded:
@@ -149,7 +153,7 @@ def rj_civitas__palver(
             "send_discord_report": True,
             "github_repo": github_repo,
             "bigquery_project": project_id,
-            "target": "dev",
+            "target": dbt_target,
             "gcs_buckets": gcs_buckets
         }
 

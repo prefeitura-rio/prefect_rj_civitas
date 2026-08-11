@@ -11,6 +11,9 @@ import unicodedata
 from google.cloud import bigquery
 from iplanrio.pipelines_utils.logging import log
 from prefect import task
+from prefect_rj_civitas import (
+    save_data_in_bq_table
+)
 
 tz = pytz.timezone("America/Sao_Paulo")
 
@@ -195,23 +198,15 @@ def load_to_table_task(
         bigquery.SchemaField(name="timestamp_insercao", field_type="TIMESTAMP", mode="REQUIRED")
         ]
 
-    client = bigquery.Client()
-    table_full_name = f"{project_id}.{dataset_id}.{table_id}"
-
-    job_config = bigquery.LoadJobConfig(
-        schema=schema,
-        ignore_unknown_values=True,
-        create_disposition=bigquery.CreateDisposition.CREATE_IF_NEEDED,
-        write_disposition=write_disposition
-    )
-
-    timestamp_now = datetime.now(tz=tz).strftime("%Y-%m-%d %H:%M:%S")
-    data = [{**row, "timestamp_insercao": timestamp_now} for row in data]
-
-    try:
-        job = client.load_table_from_json(data, table_full_name, job_config=job_config)
-        job.result()
-    except Exception as e:
-        raise Exception(e)
+    save_data_in_bq_table(
+                project_id=project_id,
+                dataset_id=dataset_id,
+                table_id=table_id,
+                schema=schema,
+                data=data,
+                write_disposition=write_disposition,
+                ignore_unknown_values=True,
+                insert_timestamp_field="timestamp_insercao"
+            )
 
     log(f"{len(data)} registers written to {project_id}.{dataset_id}.{table_id}")

@@ -11,12 +11,13 @@ from google.cloud import bigquery
 from iplanrio.pipelines_utils.env import getenv_or_action
 from iplanrio.pipelines_utils.logging import log
 from prefect import task
-
+from prefect_rj_civitas import (
+    save_data_in_bq_table
+)
 from pipelines.rj_civitas__fogo_cruzado.utils import (
     get_occurrences,
     get_valid_token,
-    safe_float_conversion,
-    save_data_in_bq,
+    safe_float_conversion
 )
 
 tz = pytz.timezone("America/Sao_Paulo")
@@ -393,12 +394,16 @@ def load_to_table_task(
         project_id = f"{project_id}-dev"
 
     log(f"Writing occurrences to {project_id}.{dataset_id}.{table_id}")
-    save_data_in_bq(
+    save_data_in_bq_table(
         project_id=project_id,
         dataset_id=dataset_id,
         table_id=table_id,
         schema=_OCCURRENCES_SCHEMA,
-        json_data=occurrences,
+        data=occurrences,
         write_disposition=write_disposition,
+        insert_timestamp_field="timestamp_insercao",
+        partition_field="timestamp_insercao",
+        partition_granularity="MONTH",
+        clustering_fields=["timestamp_insercao"]
     )
     log(f"{len(occurrences)} occurrences written to {project_id}.{dataset_id}.{table_id}")

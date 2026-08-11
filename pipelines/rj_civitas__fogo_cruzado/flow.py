@@ -81,6 +81,7 @@ def rj_civitas__fogo_cruzado(
     )
 
     if materialize_after_dump:
+        dbt_target = "dev" if mode == "prod" else "staging"
         dbt_select = "+reports_fogo_cruzado" if materialize_reports_fc_after_dump else dataset_id
         materialize_after_dump_parameters: dict[str, Any] = {
             "command": "build",
@@ -88,7 +89,7 @@ def rj_civitas__fogo_cruzado(
             "send_discord_report": True,
             "github_repo": github_repo,
             "bigquery_project": project_id,
-            "target": "dev",
+            "target": dbt_target,
             "gcs_buckets": gcs_buckets,
         }
 
