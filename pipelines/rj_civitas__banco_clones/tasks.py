@@ -5,7 +5,11 @@ Tasks da pipeline banco_clones.
 from google.cloud import bigquery
 from iplanrio.pipelines_utils.logging import log
 from prefect import task
+from typing import Any, Dict, List, Literal
 
+from prefect_rj_civitas import (
+    save_data_in_bq_table
+)
 from pipelines.rj_civitas__banco_clones.subtasks import (
     resolve_start_date,
     fetch_new_clonned_plates_and_days,
@@ -25,7 +29,7 @@ def get_readings_task(
     readings_full_table_id: str,
     banco_clones_full_table_id: str,
     pares_suspeitos_full_table_id: str,
-    auditoria_full_table_id: str
+    trilhas_full_table_id: str
 ) -> list[dict] | None:
     log("Conecting to BigQuery")
     try:
@@ -37,7 +41,7 @@ def get_readings_task(
     log("Fetching new cloned plate registers...")
     resolved_start_date = resolve_start_date(
         bq_client=bq_client,
-        auditoria_table_id=auditoria_full_table_id,
+        trilhas_table_id=trilhas_full_table_id,
         start_date=start_date
         )
 
@@ -66,6 +70,7 @@ def get_readings_task(
 def get_tracks_task(
     readings: dict
 ):
+    log("Separating tracks...")
     tracks_data = []
     for row in readings:
         placa = row["placa"]
@@ -112,9 +117,101 @@ def get_tracks_task(
         tracks_data.append({
             "placa": placa,
             "dia": dia,
-            "carro_a": trilha_a,
-            "carro_b": trilha_b,
+            "trilha_a": trilha_a,
+            "trilha_b": trilha_b,
             "deteccoes_ambiguas": ambiguos,
             "civitas_ambas_trilhas": civitas_in_track_a and civitas_in_track_b
         })
+    log("Tracks successfully separated")
     return tracks_data
+
+
+@task
+def upload_to_table_task(
+    project_id: str,
+    dataset_id: str,
+    table_id: str,
+    data: List[Dict[str, Any]],
+    write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"] = "WRITE_APPEND"
+):
+    schema = schema = [
+            bigquery.SchemaField(name="placa", field_type="STRING", mode="REQUIRED"),
+            bigquery.SchemaField(name="dia", field_type="DATE", mode="REQUIRED"),
+            bigquery.SchemaField(
+                name="trilha_a",
+                field_type="STRUCT",
+                mode="REPEATED",
+                fields=[
+                    bigquery.SchemaField(name="id", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="datahora", field_type="TIMESTAMP", mode="NULLABLE"),
+                    bigquery.SchemaField(name="empresa", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="latitude", field_type="FLOAT", mode="NULLABLE"),
+                    bigquery.SchemaField(name="longitude", field_type="FLOAT", mode="NULLABLE"),
+                    bigquery.SchemaField(name="sentido", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="bairro", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="localidade", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="velocidade", field_type="FLOAT", mode="NULLABLE"),
+                    bigquery.SchemaField(name="id_ponto_coleta", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="camera_numero", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="suspeito", field_type="BOOLEAN", mode="NULLABLE")
+                ],
+            ),
+            bigquery.SchemaField(
+                name="trilha_b",
+                field_type="STRUCT",
+                mode="REPEATED",
+                fields=[
+                    bigquery.SchemaField(name="id", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="datahora", field_type="TIMESTAMP", mode="NULLABLE"),
+                    bigquery.SchemaField(name="empresa", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="latitude", field_type="FLOAT", mode="NULLABLE"),
+                    bigquery.SchemaField(name="longitude", field_type="FLOAT", mode="NULLABLE"),
+                    bigquery.SchemaField(name="sentido", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="bairro", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="localidade", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="velocidade", field_type="FLOAT", mode="NULLABLE"),
+                    bigquery.SchemaField(name="id_ponto_coleta", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="camera_numero", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="suspeito", field_type="BOOLEAN", mode="NULLABLE")
+                ],
+            ),
+            bigquery.SchemaField(
+                name="deteccoes_ambiguas",
+                field_type="STRUCT",
+                mode="REPEATED",
+                fields=[
+                    bigquery.SchemaField(name="id", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="datahora", field_type="TIMESTAMP", mode="NULLABLE"),
+                    bigquery.SchemaField(name="empresa", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="latitude", field_type="FLOAT", mode="NULLABLE"),
+                    bigquery.SchemaField(name="longitude", field_type="FLOAT", mode="NULLABLE"),
+                    bigquery.SchemaField(name="sentido", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="bairro", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="localidade", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="velocidade", field_type="FLOAT", mode="NULLABLE"),
+                    bigquery.SchemaField(name="id_ponto_coleta", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="camera_numero", field_type="STRING", mode="NULLABLE")
+                ],
+            ),
+            bigquery.SchemaField(name="civitas_ambas_trilhas", field_type="BOOLEAN", mode="NULLABLE"),
+            bigquery.SchemaField(name="timestamp_insercao", field_type="TIMESTAMP", mode="REQUIRED")
+            ]
+
+    log(f"Writing registers to {project_id}.{dataset_id}.{table_id}")
+
+    save_data_in_bq_table(
+            project_id=project_id,
+            dataset_id=dataset_id,
+            table_id=table_id,
+            schema=schema,
+            data=data,
+            write_disposition=write_disposition,
+            partition_field="dia",
+            partition_granularity="MONTH",
+            clustering_fields=["placa"],
+            ignore_unknown_values=True,
+            allow_field_addition=True,
+            insert_timestamp_field="timestamp_insercao"
+        )
+    log(f"{len(data)} registers written to {project_id}.{dataset_id}.{table_id}")
+
