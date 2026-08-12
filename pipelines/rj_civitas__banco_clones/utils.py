@@ -72,7 +72,7 @@ def get_detection_track(
 
     if next_anchor:
         next_a = plate_detections[next_anchor["inicio_a"]]
-        next_b = plate_detections[next_anchor["inicio_a"]]
+        next_b = plate_detections[next_anchor["inicio_b"]]
         if detection["datahora"] == next_a["datahora"] \
             and haversine_km(detection, next_a) < 0.5:
             return "A"
@@ -98,9 +98,11 @@ def get_detection_track(
     else:
         return None
 
+    diff_cost = worst_cost - best_cost
+    ratio_cost = worst_cost / 0.0001 if best_cost == 0 else worst_cost / best_cost
     if best_cost >= CUSTO_INVIAVEL \
-        or (worst_cost - best_cost < DIF_CLAREZA_INSERCAO_KM \
-            and worst_cost / best_cost < RAZAO_CLAREZA_INSERCAO):
+        or (diff_cost < DIF_CLAREZA_INSERCAO_KM \
+            and ratio_cost < RAZAO_CLAREZA_INSERCAO):
         return None
 
     return best_track

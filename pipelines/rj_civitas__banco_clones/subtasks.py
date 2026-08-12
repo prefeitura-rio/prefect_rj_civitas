@@ -331,13 +331,13 @@ def get_valid_segment(
 
     i = first_index + 1
     while i < last_index:
-        if i + 1 < last_index and is_spike(readings[i-1], readings[i], readings[i + 1]):
+        if i + 1 < last_index and is_spike(segment[-1], readings[i], readings[i + 1]):
             outliers.append(readings[i])
             i += 1
             continue
 
-        distancia = haversine_km(readings[i-1], readings[i])
-        if distancia <= DIST_MAX_ALTERNATIVA_KM and custo_trecho(readings[i-1], readings[i]) < CUSTO_INVIAVEL:
+        distancia = haversine_km(segment[-1], readings[i])
+        if distancia <= DIST_MAX_ALTERNATIVA_KM and custo_trecho(segment[-1], readings[i]) < CUSTO_INVIAVEL:
             segment.append(readings[i])
         else:
             outliers.append(readings[i])
@@ -346,14 +346,20 @@ def get_valid_segment(
     return segment, outliers
 
 
-def apply_intermediate_detections_tracks(leituras, ancoras, trilha_a, trilha_b, ambiguos):
+def apply_intermediate_and_last_detections_tracks(leituras, ancoras, trilha_a, trilha_b, ambiguos):
         i = 0
         ancoras_length = len(ancoras)
-        while i + 1 < ancoras_length:
+        while i < ancoras_length:
             detection_index = max(ancoras[i]["fim_a"], ancoras[i]["fim_b"]) + 1
-            while detection_index < min(ancoras[i+1]["inicio_a"], ancoras[i+1]["inicio_b"]):
+            if i + 1 < ancoras_length:
+                last_index = min(ancoras[i+1]["inicio_a"], ancoras[i+1]["inicio_b"])
+                next_anchor = ancoras[i+1]
+            else:
+                last_index = len(leituras)
+                next_anchor = None
+            while detection_index < last_index:
                 detection = leituras[detection_index]
-                detection_track = get_detection_track(leituras, detection, ancoras[i], ancoras[i+1])
+                detection_track = get_detection_track(leituras, detection, ancoras[i], next_anchor)
                 if detection_track == "A":
                     trilha_a.append(detection)
                     ancoras[i]["fim_a"] = detection_index

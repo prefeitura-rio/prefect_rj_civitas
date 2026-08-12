@@ -13,7 +13,7 @@ from pipelines.rj_civitas__banco_clones.subtasks import (
     separate_suspect_pairs_into_tracks,
     create_anchors,
     get_valid_segment,
-    apply_intermediate_detections_tracks
+    apply_intermediate_and_last_detections_tracks
 )
 from pipelines.rj_civitas__banco_clones.utils import (
     get_detection_track
@@ -93,25 +93,21 @@ def get_tracks_task(
             else:
                 ambiguos = leituras[:first_anchor_index]
 
-        apply_intermediate_detections_tracks(leituras, ancoras, trilha_a, trilha_b, ambiguos)
+        apply_intermediate_and_last_detections_tracks(leituras, ancoras, trilha_a, trilha_b, ambiguos)
 
-        final_segment_first_index = max(ancoras[-1]["fim_a"], ancoras[-1]["fim_b"]) + 1
-        if final_segment_first_index < len(leituras):
-            final_segment, final_outliers = get_valid_segment(leituras, final_segment_first_index, len(leituras))
-            final_segment_track = get_detection_track(leituras, final_segment[0], ancoras[-1], None)
-            if final_segment_track == "A":
-                trilha_a[-1:] = final_segment
-                ancoras[-1]["fim_a"] = len(leituras) - 1
-                ambiguos.extend(final_outliers)
-            elif initial_segment_track == "B":
-                trilha_b[-1:] = final_segment
-                ancoras[-1]["fim_b"] = len(leituras) - 1
-                ambiguos.extend(final_outliers)
-            else:
-                ambiguos.extend(leituras[final_segment_first_index:])
+        civitas_in_track_a = civitas_in_track_b = False
 
-        civitas_in_track_a = any(detection["empresa"] == "CIVITAS" for detection in trilha_a)
-        civitas_in_track_b = any(detection["empresa"] == "CIVITAS" for detection in trilha_b)
+        for detection in trilha_a:
+            if not detection.get("suspeito"):
+                detection["suspeito"] = False
+            if detection["empresa"] == "CIVITAS":
+                civitas_in_track_a = True
+
+        for detection in trilha_b:
+            if not detection.get("suspeito"):
+                detection["suspeito"] = False
+            if detection["empresa"] == "CIVITAS":
+                civitas_in_track_b = True
 
         tracks_data.append({
             "placa": placa,
