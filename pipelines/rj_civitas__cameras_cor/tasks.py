@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
 import httpx
 import csv
-from typing import Literal
-from google.cloud import bigquery
+import io
+from typing import Literal, List, Dict, Any
+from google.cloud import bigquery, storage
 from prefect import task
 from iplanrio.pipelines_utils.prefect import log
 
 
-@task
+@task(retries=3)
 def fetch_cameras_task(
     tixxi_url: str,
     tixxi_key: str,
     tixxi_email: str,
     tixxi_password: str
-):
+) -> List[Dict[str, Any]]:
     body = {
         "api_key": tixxi_key,
         "email": tixxi_email,
@@ -22,47 +23,53 @@ def fetch_cameras_task(
     log(f"Fetching data from TIXXI", level="info")
     try:
         response = httpx.post(url=tixxi_url, json=body)
-
         response.raise_for_status()
-        log("Data obtained successfully.", level="info")
-
         data = response.json()["cameras"]
-
         cameras = [{
-            "CameraCode": camera["code"],
-            "CameraName": camera["name"],
-            "CameraZone": None,
-            "Latitude": camera["latitude"],
-            "Longitude": camera["longitude"],
-            "Streamming": camera["stream_url"]
-        } for camera in data]
-
-        if isinstance(cameras, list) and len(cameras) > 0:
-            headers = cameras[0].keys()
-
-            with open("temp_tixxi_cameras.csv", "w", newline='', encoding='utf-8') as csv_file:
-                writer = csv.DictWriter(csv_file, fieldnames=headers)
-                writer.writeheader()
-                writer.writerows(cameras)
-
-            return True
-
-        else:
-            log("Format returned is not JSON or it is empty", level="error")
-            return None
+                "CameraCode": camera["code"],
+                "CameraName": camera["name"],
+                "CameraZone": None,
+                "Latitude": camera["latitude"],
+                "Longitude": camera["longitude"],
+                "Streamming": camera["stream_url"]
+            } for camera in data]
+        log("Data obtained successfully.", level="info")
+        return cameras
 
     except Exception as e:
         log(f"Error obtaining data: {e}", level="error")
         raise
 
 @task
-def upload_to_data_storage_task(
+def upload_data_to_storage_task(
     project_id: str,
-    bucket_id: str,
-    file_name: str,
-    data: list[dict]
+    bucket_name: str,
+    blob_full_name: str,
+    data: List[Dict[str, Any]],
+    column_names: List[str]
 ):
-    #TODO
+    log(f"Uploading data to {f"{bucket_name}/{blob_full_name}"}")
+    output = io.StringIO()
+
+    writer = csv.DictWriter(
+        output,
+        fieldnames=column_names,
+        extrasaction="ignore",
+    )
+
+    writer.writeheader()
+    writer.writerows(data)
+
+    client = storage.Client(project=project_id)
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(blob_full_name)
+
+    blob.upload_from_string(
+        output.getvalue(),
+        content_type="text/csv",
+    )
+
+    print(f"Uploaded gs://{bucket_name}/{blob_full_name}")
     return
 
 @task
@@ -72,7 +79,7 @@ def create_external_storage_table_task(
     table_id: str,
     gcs_path: str,
     schema: list[bigquery.SchemaField],
-    file_format: Literal["PARQUET", "CSV"] = "CSV"
+    file_format: Literal["PARQUET", "CSV"]
 ):
     """
     Cria uma tabela externa no BigQuery apontando para um bucket GCS.
@@ -86,7 +93,7 @@ def create_external_storage_table_task(
         file_format: PARQUET ou CSV
     """
 
-    client = bigquery.Client()
+    client = bigquery.Client(project=project_id)
 
     table_ref = f"{project_id}.{dataset_id}.{table_id}"
 

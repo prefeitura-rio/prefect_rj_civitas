@@ -2,7 +2,7 @@
 """
 CIVITAS — Extração e carga no datalake dos dados de câmeras do COR (Prefect 3).
 """
-
+from google.cloud import bigquery
 from typing import Literal, Any
 
 from iplanrio.pipelines_utils.env import inject_bd_credentials_task, getenv_or_action
@@ -24,11 +24,13 @@ from pipelines.rj_civitas__cameras_cor.tasks import (
 
 
 @flow(log_prints=True)
-def rj_civitas__cameras_civitas(
+def rj_civitas__cameras_cor(
     project_id: str = "rj-civitas",
     dataset_id: str = "cerco_digital",
     table_id: str = "cameras",
-    gcs_path: str = "/cameras.csv",
+    bucket_name: str = "teste_civitas",
+    blob_path: str = "cameras/",
+    blob_name: str = "cameras.csv",
     dbt_select: str = "cameras",
     materialize_after_dump: bool = True,
     mode: Literal["dev", "prod", "staging"] = "staging",
@@ -74,20 +76,38 @@ def rj_civitas__cameras_civitas(
             name="Skipped",
         )
 
+    column_names = ["CameraCode",
+                    "CameraName",
+                    "CameraZone",
+                    "Latitude",
+                    "Longitude",
+                    "Streamming"
+    ]
+    bq_schema = [
+        bigquery.SchemaField(name="CameraCode", field_type="STRING", mode="REQUIRED"),
+        bigquery.SchemaField(name="CameraName", field_type="STRING", mode="NULLABLE"),
+        bigquery.SchemaField(name="CameraZone", field_type="STRING", mode="NULLABLE"),
+        bigquery.SchemaField(name="Latitude", field_type="STRING", mode="NULLABLE"),
+        bigquery.SchemaField(name="Longitude", field_type="STRING", mode="NULLABLE"),
+        bigquery.SchemaField(name="Streamming", field_type="STRING", mode="NULLABLE")
+    ]
+
     upload_data_to_storage_task(
         project_id=project_id,
-        bucket_id=bucket_id,
-        gcs_path=gcs_path,
-        data=data
+        bucket_name=bucket_name,
+        blob_full_name=f"{blob_path}{blob_name}",
+        data=data,
+        column_names=column_names
     )
 
+    gcs_path = f"gs://{bucket_name}/{blob_path}*"
     create_external_storage_table_task(
         project_id=project_id,
         dataset_id=dataset_id,
         table_id=table_id,
         gcs_path=gcs_path,
         schema=bq_schema,
-        file_format=file_format
+        file_format="CSV"
     )
 
     if materialize_after_dump:
