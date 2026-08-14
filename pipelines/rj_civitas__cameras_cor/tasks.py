@@ -4,6 +4,7 @@ import csv
 import io
 from typing import Literal, List, Dict, Any
 from google.cloud import bigquery, storage
+from google.api_core.exceptions import NotFound
 from prefect import task
 from iplanrio.pipelines_utils.prefect import log
 
@@ -69,7 +70,7 @@ def upload_data_to_storage_task(
         content_type="text/csv",
     )
 
-    print(f"Uploaded gs://{bucket_name}/{blob_full_name}")
+    log(f"Uploaded gs://{bucket_name}/{blob_full_name}", level="info")
     return
 
 @task
@@ -92,10 +93,10 @@ def create_external_storage_table_task(
         schema: lista de bigquery.SchemaField
         file_format: PARQUET ou CSV
     """
-
     client = bigquery.Client(project=project_id)
 
-    table_ref = f"{project_id}.{dataset_id}.{table_id}"
+    full_table_id = f"{project_id}.{dataset_id}.{table_id}"
+    log(f"Creating external table {full_table_id}", level="info")
 
     external_config = bigquery.ExternalConfig(file_format)
 
@@ -109,10 +110,15 @@ def create_external_storage_table_task(
 
     external_config.autodetect = False
 
-    table = bigquery.Table(table_ref)
+    table = bigquery.Table(full_table_id)
     table.external_data_configuration = external_config
 
-    table = client.create_table(table, exists_ok=True)
+    try:
+        existing_table = client.get(full_table_id)
+        log(f"Table {full_table_id} already exists. Skipping table creation", level="info")
+        return existing_table
 
-    print(f"Tabela externa criada: {table.full_table_id}")
-    return table
+    except NotFound:
+        table = client.create_table(table, exists_ok=True)
+        log(f"External table {full_table_id} successfully created", level="info")
+        return table

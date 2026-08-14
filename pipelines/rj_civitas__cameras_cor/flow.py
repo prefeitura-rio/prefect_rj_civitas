@@ -28,7 +28,7 @@ def rj_civitas__cameras_cor(
     project_id: str = "rj-civitas",
     dataset_id: str = "cerco_digital",
     table_id: str = "cameras",
-    bucket_name: str = "teste_civitas",
+    bucket_name: str = "teste-civitas",
     blob_path: str = "cameras/",
     blob_name: str = "cameras.csv",
     dbt_select: str = "cameras",
@@ -103,7 +103,7 @@ def rj_civitas__cameras_cor(
     gcs_path = f"gs://{bucket_name}/{blob_path}*"
     create_external_storage_table_task(
         project_id=project_id,
-        dataset_id=dataset_id,
+        dataset_id=f"{dataset_id}_staging",
         table_id=table_id,
         gcs_path=gcs_path,
         schema=bq_schema,

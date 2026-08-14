@@ -50,13 +50,26 @@ deployments:
         image_pull_policy: Always
 
     schedules:
-    - interval: 86400 # executa a cada 24h
+    - interval: 3600
       anchor_date: "2026-08-01T00:00:00-03:00"
       timezone: America/Sao_Paulo
-      slug: daily
+      slug: tixxi_hourly
       parameters:
+        project_id: rj-civitas
+        dataset_id: cerco_digital
+        table_id: cameras
+        bucket_name: rj-civitas
+        blob_path: staging/cerco_digital/cameras/
+        blob_name: cameras.csv
+        dbt_select: cameras
         materialize_after_dump: true
+        github_repo: https://github.com/prefeitura-rio/pipelines_rj_civitas
         mode: prod
         gcs_buckets:
             prod: "rj-civitas_dbt"
             dev: "rj-civitas-dev_dbt"
+        required_secrets:
+          - TIXXI_API_KEY
+          - TIXXI_API_EMAIL
+          - TIXXI_API_PASSWORD
+          - TIXXI_API_URL
