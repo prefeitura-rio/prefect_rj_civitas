@@ -14,12 +14,12 @@ from prefect_rj_civitas import (
     run_deployment_task,
     skip_if_already_running,
     verify_secrets_task,
+    upload_data_to_storage_task,
+    create_external_storage_table_task
 )
 
 from pipelines.rj_civitas__cameras_cor.tasks import (
-    fetch_cameras_task,
-    upload_data_to_storage_task,
-    create_external_storage_table_task
+    fetch_cameras_task
 )
 
 
