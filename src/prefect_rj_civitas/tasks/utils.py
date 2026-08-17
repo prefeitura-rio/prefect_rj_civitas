@@ -18,6 +18,7 @@ def save_data_in_bq_table(
         project_id: str,
         dataset_id: str,
         table_id: str,
+        table_description: str | None = None,
         write_disposition: str = "WRITE_APPEND",
         allow_field_addition: bool = False,
         ignore_unknown_values: bool = True,
@@ -38,6 +39,9 @@ def save_data_in_bq_table(
         schema=schema,
         write_disposition=write_disposition
     )
+
+    if table_description:
+        job_config.destination_table_description = table_description
 
     if clustering_fields:
         job_config.clustering_fields = clustering_fields

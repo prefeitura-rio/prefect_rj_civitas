@@ -134,13 +134,26 @@ def upload_to_table_task(
     data: List[Dict[str, Any]],
     write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"] = "WRITE_APPEND"
 ):
-    schema = schema = [
-            bigquery.SchemaField(name="placa", field_type="STRING", mode="REQUIRED"),
-            bigquery.SchemaField(name="dia", field_type="DATE", mode="REQUIRED"),
+    table_description = """
+      **Descrição**: Tabela com as trilhas prováveis percorridas por cada veículo em cada dia suspeito dentre as placas presentes no banco de clones.
+        A placa é considerada suspeita no dia se passou pelos filtros do banco_clones_dia, a saber:
+        -Mínimo de 4 detecções suspeitas no dia
+        -Score de trajeto < 90
+        -Score OCR < 60 ou Score de trajeto <=10 (trajetos muito claros e naturais superam uma placa muito passível de erros de leitura)
+
+      **Frequência de atualização**: Diária
+      **Origem**: rj-civitas.cerco_digital.vw_all_readings, rj-civitas.banco_clones_staging.pares_suspeitos, rj-civitas.banco_clones.banco_clones_dia
+      **Publicado por**: Jorge Mendes
+      **Publicado por (email)**: jorge.mendes@prefeitura.rio
+      """
+    schema = [
+            bigquery.SchemaField(name="placa", field_type="STRING", mode="REQUIRED", description="Placa do veículo suspeito de clonagem"),
+            bigquery.SchemaField(name="dia", field_type="DATE", mode="REQUIRED", description="Data suspeita"),
             bigquery.SchemaField(
                 name="trilha_a",
                 field_type="STRUCT",
                 mode="REPEATED",
+                description="Lista ordenada de detecções associadas ao veículo A",
                 fields=[
                     bigquery.SchemaField(name="id", field_type="STRING", mode="NULLABLE"),
                     bigquery.SchemaField(name="datahora", field_type="TIMESTAMP", mode="NULLABLE"),
@@ -160,6 +173,7 @@ def upload_to_table_task(
                 name="trilha_b",
                 field_type="STRUCT",
                 mode="REPEATED",
+                description="Lista ordenada de detecções associadas ao veículo B",
                 fields=[
                     bigquery.SchemaField(name="id", field_type="STRING", mode="NULLABLE"),
                     bigquery.SchemaField(name="datahora", field_type="TIMESTAMP", mode="NULLABLE"),
@@ -179,6 +193,7 @@ def upload_to_table_task(
                 name="deteccoes_ambiguas",
                 field_type="STRUCT",
                 mode="REPEATED",
+                description="Lista ordenada de detecções que não podem ser associadas claramente a uma das duas trilhas",
                 fields=[
                     bigquery.SchemaField(name="id", field_type="STRING", mode="NULLABLE"),
                     bigquery.SchemaField(name="datahora", field_type="TIMESTAMP", mode="NULLABLE"),
@@ -193,8 +208,8 @@ def upload_to_table_task(
                     bigquery.SchemaField(name="camera_numero", field_type="STRING", mode="NULLABLE")
                 ],
             ),
-            bigquery.SchemaField(name="civitas_ambas_trilhas", field_type="BOOLEAN", mode="NULLABLE"),
-            bigquery.SchemaField(name="timestamp_insercao", field_type="TIMESTAMP", mode="REQUIRED")
+            bigquery.SchemaField(name="civitas_ambas_trilhas", field_type="BOOLEAN", mode="NULLABLE", description="Possui ao menos uma detecção de câmera da CIVITAS em cada uma das trilhas"),
+            bigquery.SchemaField(name="timestamp_insercao", field_type="TIMESTAMP", mode="REQUIRED", description="Timestamp UTC da inserção do registro nesta tabela")
             ]
 
     log(f"Writing registers to {project_id}.{dataset_id}.{table_id}")
@@ -204,6 +219,7 @@ def upload_to_table_task(
             dataset_id=dataset_id,
             table_id=table_id,
             schema=schema,
+            table_description=table_description,
             data=data,
             write_disposition=write_disposition,
             partition_field="dia",

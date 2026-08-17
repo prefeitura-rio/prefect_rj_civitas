@@ -36,9 +36,7 @@ def rj_civitas__banco_clones(
     gcs_buckets: dict[str, str] | None = {
         "prod": "rj-civitas_dbt",
         "dev": "rj-civitas-dev_dbt"
-    },
-    required_secrets: tuple[str, ...] = (
-    )
+    }
 ):
     rename_current_flow_run_task(new_name=f"banco_clones-{mode}")
 
@@ -46,8 +44,6 @@ def rj_civitas__banco_clones(
         return skip
 
     inject_bd_credentials_task(environment="prod")
-
-    verify_secrets_task(secrets=required_secrets)
 
     if mode in ("dev", "staging"):
         project_id = f"{project_id}-dev"
