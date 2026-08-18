@@ -55,10 +55,10 @@ def fetch_new_clonned_plates_and_days(
     log("Fetching new clonned plates...")
 
     query_new_clonned_plates = f"""
-        SELECT DISTINCT placa, ultimo_dia_suspeito, temperatura FROM `{banco_clones_table_id}`
+        SELECT DISTINCT placa, dia FROM `{banco_clones_table_id}`
         WHERE timestamp_insercao >= TIMESTAMP('{start_date}', 'America/Sao_Paulo')
-          AND ultimo_dia_suspeito >= CAST('{start_date}' AS DATE)
-          AND ultimo_dia_suspeito < CURRENT_DATE()
+          AND dia >= CAST('{start_date}' AS DATE)
+          AND dia < CURRENT_DATE()
     """
 
     returned_plates_days = {}
@@ -66,7 +66,7 @@ def fetch_new_clonned_plates_and_days(
 
     for row in rows:
         placa = row.placa
-        dia = row.ultimo_dia_suspeito
+        dia = row.dia
         if returned_plates_days.get(placa, None) is None:
             returned_plates_days[placa] = set([dia])
         else:
