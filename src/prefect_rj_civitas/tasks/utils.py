@@ -40,9 +40,6 @@ def save_data_in_bq_table(
         write_disposition=write_disposition
     )
 
-    if table_description:
-        job_config.destination_table_description = table_description
-
     if clustering_fields:
         job_config.clustering_fields = clustering_fields
 
@@ -63,5 +60,10 @@ def save_data_in_bq_table(
     try:
         job = client.load_table_from_json(data, table_full_name, job_config=job_config)
         job.result()
+
+        if table_description is not None:
+            table = client.get_table(table_full_name)
+            table.description = table_description
+            client.update_table(table, ["description"])
     except Exception as e:
         raise Exception(e)
