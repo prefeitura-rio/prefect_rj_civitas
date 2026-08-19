@@ -114,6 +114,10 @@ def get_tracks_task(
             if detection["empresa"] == "CIVITAS":
                 civitas_in_track_b = True
 
+        trilha_a.sort(key=lambda x: x["datahora"])
+        trilha_b.sort(key=lambda x: x["datahora"])
+        ambiguos.sort(key=lambda x: x["datahora"])
+
         tracks_data.append({
             "placa": placa,
             "dia": dia,
