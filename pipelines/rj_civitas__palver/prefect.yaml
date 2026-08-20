@@ -25,6 +25,7 @@ pull:
 
 deployments:
   - name: rj-civitas--palver--staging
+    tags: [staging]
     version: "{{ build-image.tag }}"
     entrypoint: pipelines/rj_civitas__palver/flow.py:rj_civitas__palver
     work_pool:
@@ -36,6 +37,7 @@ deployments:
         secretName: prefect-jobs-secrets-staging  #pragma: allowlist secret
         image_pull_policy: Always
   - name: rj-civitas--palver--prod
+    tags: [prod]
     version: "{{ get-commit-hash.stdout }}"
     entrypoint: pipelines/rj_civitas__palver/flow.py:rj_civitas__palver
     work_pool:
