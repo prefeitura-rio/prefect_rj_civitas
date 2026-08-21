@@ -158,6 +158,7 @@ def get_plates_readings(
             ) AS flag_trilha   --troca de trilha com relação ao anterior? Se sim, flag 1
         FROM `{pares_suspeitos_table_id}`
             WHERE datahora_posterior >= TIMESTAMP('{start_date}', 'America/Sao_Paulo')
+            AND DATE(datahora_anterior, 'America/Sao_Paulo') = data_dia
             AND CONCAT(placa, CAST(DATE(datahora_posterior, 'America/Sao_Paulo') AS STRING)) IN ({string_plates_days_list})
         ),
 
