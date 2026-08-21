@@ -20,7 +20,7 @@ def resolve_start_date(
     """
     Pegar último dia da tabela de trilhas ṕara implementar lógica incremental
     """
-    log("Resolving start date for nincremental logic...")
+    log("Resolving start date for incremental logic...")
     query_max_date = f"""
         SELECT DATE_ADD(MAX(dia), INTERVAL 1 DAY) FROM `{trilhas_table_id}`
     """
@@ -56,8 +56,7 @@ def fetch_new_clonned_plates_and_days(
 
     query_new_clonned_plates = f"""
         SELECT DISTINCT placa, dia FROM `{banco_clones_table_id}`
-        WHERE timestamp_insercao >= TIMESTAMP('{start_date}', 'America/Sao_Paulo')
-          AND dia >= CAST('{start_date}' AS DATE)
+        WHERE dia >= CAST('{start_date}' AS DATE)
           AND dia < CURRENT_DATE()
     """
 
