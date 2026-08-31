@@ -100,19 +100,19 @@ def get_tracks_task(
 
         apply_intermediate_and_last_detections_tracks(leituras, ancoras, trilha_a, trilha_b, ambiguos)
 
-        civitas_in_track_a = civitas_in_track_b = False
+        has_image_a = has_image_b = False
 
         for detection in trilha_a:
             if not detection.get("suspeito"):
                 detection["suspeito"] = False
             if detection["empresa"] == "CIVITAS":
-                civitas_in_track_a = True
+                has_image_a = True
 
         for detection in trilha_b:
             if not detection.get("suspeito"):
                 detection["suspeito"] = False
             if detection["empresa"] == "CIVITAS":
-                civitas_in_track_b = True
+                has_image_b = True
 
         trilha_a.sort(key=lambda x: x["datahora"])
         trilha_b.sort(key=lambda x: x["datahora"])
@@ -124,7 +124,7 @@ def get_tracks_task(
             "trilha_a": trilha_a,
             "trilha_b": trilha_b,
             "deteccoes_ambiguas": ambiguos,
-            "civitas_ambas_trilhas": civitas_in_track_a and civitas_in_track_b
+            "visualmente_verificavel": has_image_a and has_image_b
         })
     log("Tracks successfully separated")
     return tracks_data
@@ -212,7 +212,7 @@ def upload_to_table_task(
                     bigquery.SchemaField(name="camera_numero", field_type="STRING", mode="NULLABLE")
                 ],
             ),
-            bigquery.SchemaField(name="civitas_ambas_trilhas", field_type="BOOLEAN", mode="NULLABLE", description="Possui ao menos uma detecção de câmera da CIVITAS em cada uma das trilhas"),
+            bigquery.SchemaField(name="visualmente_verificavel", field_type="BOOLEAN", mode="NULLABLE", description="Possui ao menos uma detecção verificável visualmente em cada uma das trilhas"),
             bigquery.SchemaField(name="timestamp_insercao", field_type="TIMESTAMP", mode="REQUIRED", description="Timestamp UTC da inserção do registro nesta tabela")
             ]
 
