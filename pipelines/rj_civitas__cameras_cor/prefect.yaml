@@ -50,10 +50,10 @@ deployments:
         image_pull_policy: Always
 
     schedules:
-    - interval: 3600
-      anchor_date: "2026-08-01T00:00:00-03:00"
+    - interval: 86400
+      anchor_date: "2026-09-01T00:03:00-03:00"
       timezone: America/Sao_Paulo
-      slug: tixxi_hourly
+      slug: tixxi_daily
       parameters:
         project_id: rj-civitas
         dataset_id: cerco_digital

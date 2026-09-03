@@ -24,7 +24,7 @@ def upload_data_to_storage_task(
         project_id: ID do projeto GCP
         bucket_name: nome do bucket
         blob_full_name: caminho do arquivo dentro do bucket (ex: 'pasta/subpasta/arquivo.csv')
-        data: dados no fromato de lista de dicionários
+        data: dados no formato de lista de dicionários
         column_names: lista com os nomes das colunas dos dados no CSV
     """
     log(f"Uploading data to {f"{bucket_name}/{blob_full_name}"}")
@@ -59,10 +59,12 @@ def create_external_storage_table_task(
     table_id: str,
     gcs_path: str,
     schema: list[bigquery.SchemaField],
-    file_format: Literal["PARQUET", "CSV"]
+    file_format: Literal["PARQUET", "CSV"],
+    table_description: str | None = None
 ):
     """
     Cria uma tabela externa no BigQuery apontando para um bucket GCS.
+    Se a tabela já existir, não é sobrescrita.
 
     Args:
         project_id: ID do projeto GCP
@@ -71,6 +73,7 @@ def create_external_storage_table_task(
         gcs_path: caminho gs://bucket/pasta/*
         schema: lista de bigquery.SchemaField
         file_format: PARQUET ou CSV
+        table_description: descrição da tabela
     """
     client = bigquery.Client(project=project_id)
 
@@ -90,6 +93,8 @@ def create_external_storage_table_task(
     external_config.autodetect = False
 
     table = bigquery.Table(full_table_id)
+    if table_description:
+        table.description = table_description
     table.external_data_configuration = external_config
 
     try:

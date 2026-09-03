@@ -78,19 +78,36 @@ def rj_civitas__cameras_cor(
 
     column_names = ["CameraCode",
                     "CameraName",
-                    "CameraZone",
                     "Latitude",
-                    "Longitude",
-                    "Streamming"
+                    "Longitude"
     ]
     bq_schema = [
-        bigquery.SchemaField(name="CameraCode", field_type="STRING", mode="REQUIRED"),
-        bigquery.SchemaField(name="CameraName", field_type="STRING", mode="NULLABLE"),
-        bigquery.SchemaField(name="CameraZone", field_type="STRING", mode="NULLABLE"),
-        bigquery.SchemaField(name="Latitude", field_type="STRING", mode="NULLABLE"),
-        bigquery.SchemaField(name="Longitude", field_type="STRING", mode="NULLABLE"),
-        bigquery.SchemaField(name="Streamming", field_type="STRING", mode="NULLABLE")
+        bigquery.SchemaField(
+            name="CameraCode",
+            field_type="STRING",
+            mode="REQUIRED",
+            description="Código da câmera"
+            ),
+        bigquery.SchemaField(
+            name="CameraName",
+            field_type="STRING",
+            mode="NULLABLE",
+            description="Nome da câmera"
+            ),
+        bigquery.SchemaField(
+            name="Latitude",
+            field_type="STRING",
+            mode="NULLABLE",
+            description="Latitude da câmera"
+            ),
+        bigquery.SchemaField(
+            name="Longitude",
+            field_type="STRING",
+            mode="NULLABLE",
+            description="Longitude da câmera"
+            )
     ]
+    table_description = "Dados brutos das câmeras da Tixxi extraídos diretamente da API"
 
     upload_data_to_storage_task(
         project_id=project_id,
@@ -107,7 +124,8 @@ def rj_civitas__cameras_cor(
         table_id=table_id,
         gcs_path=gcs_path,
         schema=bq_schema,
-        file_format="CSV"
+        file_format="CSV",
+        table_description=table_description
     )
 
     if materialize_after_dump:

@@ -25,10 +25,8 @@ def fetch_cameras_task(
         cameras = [{
                 "CameraCode": camera["code"],
                 "CameraName": camera["name"],
-                "CameraZone": None,
                 "Latitude": camera["latitude"],
-                "Longitude": camera["longitude"],
-                "Streamming": camera["stream_url"]
+                "Longitude": camera["longitude"]
             } for camera in data]
         log("Data obtained successfully.", level="info")
         return cameras
