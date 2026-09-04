@@ -18,6 +18,7 @@ def save_data_in_bq_table(
         project_id: str,
         dataset_id: str,
         table_id: str,
+        table_description: str | None = None,
         write_disposition: str = "WRITE_APPEND",
         allow_field_addition: bool = False,
         ignore_unknown_values: bool = True,
@@ -59,5 +60,10 @@ def save_data_in_bq_table(
     try:
         job = client.load_table_from_json(data, table_full_name, job_config=job_config)
         job.result()
+
+        if table_description is not None:
+            table = client.get_table(table_full_name)
+            table.description = table_description
+            client.update_table(table, ["description"])
     except Exception as e:
         raise Exception(e)
