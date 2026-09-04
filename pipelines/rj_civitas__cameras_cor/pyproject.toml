@@ -1,0 +1,10 @@
+[project]
+name = "rj_civitas__cameras_cor"
+version = "0.1.0"
+description = "Pipeline cameras_cor da secretaria civitas"
+dependencies = [
+    "prefect_rj_civitas",
+]
+
+[tool.uv.sources]
+prefect_rj_civitas = { workspace = true }
