@@ -125,7 +125,8 @@ def rj_civitas__cameras_cor(
         gcs_path=gcs_path,
         schema=bq_schema,
         file_format="CSV",
-        table_description=table_description
+        table_description=table_description,
+        overwrite_if_exists=True
     )
 
     if materialize_after_dump:

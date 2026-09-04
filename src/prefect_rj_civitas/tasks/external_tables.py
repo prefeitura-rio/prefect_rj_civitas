@@ -60,11 +60,11 @@ def create_external_storage_table_task(
     gcs_path: str,
     schema: list[bigquery.SchemaField],
     file_format: Literal["PARQUET", "CSV"],
-    table_description: str | None = None
+    table_description: str | None = None,
+    overwrite_if_exists: bool = False
 ):
     """
     Cria uma tabela externa no BigQuery apontando para um bucket GCS.
-    Se a tabela já existir, não é sobrescrita.
 
     Args:
         project_id: ID do projeto GCP
@@ -74,10 +74,15 @@ def create_external_storage_table_task(
         schema: lista de bigquery.SchemaField
         file_format: PARQUET ou CSV
         table_description: descrição da tabela
+        overwrite_if_exists: se a tabela já existir, sobrescrever
     """
     client = bigquery.Client(project=project_id)
 
     full_table_id = f"{project_id}.{dataset_id}.{table_id}"
+
+    if overwrite_if_exists:
+        client.delete_table(full_table_id, not_found_ok=True)
+
     log(f"Creating external table {full_table_id}", level="info")
 
     external_config = bigquery.ExternalConfig(file_format)
