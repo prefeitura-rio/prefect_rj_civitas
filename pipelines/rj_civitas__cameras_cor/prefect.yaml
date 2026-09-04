@@ -51,7 +51,7 @@ deployments:
 
     schedules:
     - interval: 86400
-      anchor_date: "2026-09-01T00:03:00-03:00"
+      anchor_date: "2026-09-01T03:00:00-03:00"
       timezone: America/Sao_Paulo
       slug: tixxi_daily
       parameters:
