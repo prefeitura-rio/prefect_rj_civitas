@@ -7,7 +7,9 @@ from utils import (
     haversine_km,
     custo_trecho,
     is_spike,
-    get_detection_track
+    get_detection_track,
+    get_plate_variations,
+    intervalo_horas
 )
 from constants import CUSTO_INVIAVEL, DIST_MAX_ALTERNATIVA_KM
 
@@ -58,6 +60,7 @@ def fetch_new_clonned_plates_and_days(
         SELECT DISTINCT placa, dia FROM `{banco_clones_table_id}`
         WHERE dia >= CAST('{start_date}' AS DATE)
           AND dia < CURRENT_DATE()
+          AND dia < DATE_ADD(CAST('{start_date}' AS DATE), INTERVAL 30 DAY)
     """
 
     returned_plates_days = {}
@@ -83,17 +86,43 @@ def get_plates_readings(
         start_date: str
 ):
     log("Getting plates readings per suspect day...")
-    string_plates_days_list = ", ".join(
+    suspect_string_plates_days_list = ", ".join(
         f"'{plate}{day.isoformat()}'"
         for plate, days in plates_days.items()
         for day in days
     )
+    variation_string_plates_days_list = ", ".join(
+            f"'{variation}{day.isoformat()}'"
+            for plate, days in plates_days.items()
+            for day in days
+            for variation in get_plate_variations(plate)
+        )
+
+    all_string_plates_days_list = suspect_string_plates_days_list + ", " + variation_string_plates_days_list
+
+    plates_variations = ", ".join(
+    f"STRUCT("
+    f"'{plate}' AS placa, "
+    f"'{variation}' AS variacao"
+    f")"
+    for plate in plates_days
+    for variation in get_plate_variations(plate)
+    )
     query_plates_readings = f"""
-        WITH leituras_validas AS (
+        WITH placas_variacoes AS (
+        SELECT
+            placa,
+            variacao
+        FROM UNNEST([
+            {plates_variations}
+        ])
+        ),
+
+        leituras_validas AS (
         SELECT
             placa,
             DATE(datahora, 'America/Sao_Paulo') AS data_dia,
-            CONCAT(id_ponto_coleta, CAST(datahora AS STRING)) AS id,
+            CONCAT(camera_numero, CAST(datahora AS STRING)) AS id,
             datahora,
             empresa,
             sentido,
@@ -107,13 +136,8 @@ def get_plates_readings(
         FROM `{readings_table_id}`
             WHERE datahora >= TIMESTAMP('{start_date}', 'America/Sao_Paulo')
             AND datahora < TIMESTAMP(CURRENT_DATE(), 'America/Sao_Paulo')
-            AND CONCAT(placa, CAST(DATE(datahora, 'America/Sao_Paulo') AS STRING)) IN ({string_plates_days_list})
-            QUALIFY ROW_NUMBER() OVER (
-                            PARTITION BY placa,
-                                        DATE(datahora, 'America/Sao_Paulo'),
-                                        CONCAT(id_ponto_coleta, CAST(datahora AS STRING))
-                            ORDER BY camera_numero ASC
-                        ) = 1
+            AND datahora < TIMESTAMP(DATE_ADD(CAST('{start_date}' AS DATE), INTERVAL 30 DAY), 'America/Sao_Paulo')
+            AND CONCAT(placa, CAST(DATE(datahora, 'America/Sao_Paulo') AS STRING)) IN ({all_string_plates_days_list})
         ),
 
         leituras_validas_struct AS (
@@ -140,14 +164,45 @@ def get_plates_readings(
         GROUP BY placa, data_dia
         ),
 
+        leituras_validas_com_similares AS (
+                SELECT
+                    a.placa,
+                    a.data_dia,
+                    a.leituras,
+                    ARRAY_AGG(
+                        STRUCT(
+                            c.placa,
+                            c.id,
+                            c.datahora,
+                            c.empresa,
+                            c.sentido,
+                            c.bairro,
+                            c.localidade,
+                            c.velocidade,
+                            c.camera_latitude,
+                            c.camera_longitude,
+                            c.id_ponto_coleta,
+                            c.camera_numero
+                        )
+                        IGNORE NULLS
+                        ORDER BY c.datahora
+                    ) AS leituras_placas_similares
+                FROM leituras_validas_struct a
+                LEFT JOIN placas_variacoes b
+                ON a.placa = b.placa
+                LEFT JOIN leituras_validas c
+                ON c.placa = b.variacao AND a.data_dia = c.data_dia
+                GROUP BY a.placa, a.data_dia, a.leituras
+                ),
+
         pares_suspeitos AS (
         SELECT
             placa,
             data_dia,
             datahora_anterior,
             datahora_posterior,
-            ponto_anterior,
-            ponto_posterior,
+            camera_anterior,
+            camera_posterior,
             geolocation_anterior,
             geolocation_posterior,
             IF(st_distance(geolocation_anterior, LAG(geolocation_posterior) OVER (PARTITION BY placa, data_dia ORDER BY datahora_anterior)) +
@@ -158,8 +213,9 @@ def get_plates_readings(
             ) AS flag_trilha   --troca de trilha com relação ao anterior? Se sim, flag 1
         FROM `{pares_suspeitos_table_id}`
             WHERE datahora_posterior >= TIMESTAMP('{start_date}', 'America/Sao_Paulo')
+            AND datahora_posterior < TIMESTAMP(DATE_ADD(CAST('{start_date}' AS DATE), INTERVAL 30 DAY), 'America/Sao_Paulo')
             AND DATE(datahora_anterior, 'America/Sao_Paulo') = data_dia
-            AND CONCAT(placa, CAST(DATE(datahora_posterior, 'America/Sao_Paulo') AS STRING)) IN ({string_plates_days_list})
+            AND CONCAT(placa, CAST(DATE(datahora_posterior, 'America/Sao_Paulo') AS STRING)) IN ({suspect_string_plates_days_list})
         ),
 
         pares_com_trilha AS (
@@ -179,8 +235,8 @@ def get_plates_readings(
         pares_finais AS (
         SELECT
             *,
-            CONCAT(ponto_anterior, CAST(datahora_anterior AS STRING)) AS id_anterior,
-            CONCAT(ponto_posterior, CAST(datahora_posterior AS STRING)) AS id_posterior,
+            CONCAT(camera_anterior, CAST(datahora_anterior AS STRING)) AS id_anterior,
+            CONCAT(camera_posterior, CAST(datahora_posterior AS STRING)) AS id_posterior,
             IF(trilha=0, 'A', 'B') AS trilha_anterior,
             IF(trilha=0, 'B', 'A') AS trilha_posterior
         FROM pares_com_trilha
@@ -190,6 +246,7 @@ def get_plates_readings(
             lv.placa,
             lv.data_dia,
             lv.leituras,
+            lv.leituras_placas_similares,
             ARRAY_AGG(
                 STRUCT(
                     pf.id_anterior,
@@ -201,10 +258,10 @@ def get_plates_readings(
                 )
                 ORDER BY pf.datahora_anterior
             ) AS pares_suspeitos_trilhas
-        FROM leituras_validas_struct lv
+        FROM leituras_validas_com_similares lv
         JOIN pares_finais pf
         ON lv.placa = pf.placa AND lv.data_dia = pf.data_dia
-        GROUP BY lv.placa, lv.data_dia, lv.leituras
+        GROUP BY lv.placa, lv.data_dia, lv.leituras, lv.leituras_placas_similares
         """
 
     readings = bq_client.query_and_wait(query=query_plates_readings)
@@ -230,6 +287,22 @@ def get_plates_readings(
                         "camera_numero": reading["camera_numero"]
                     }
                     for reading in row.leituras],
+                "leituras_placas_similares": [
+                    {
+                        "placa": reading["placa"],
+                        "id": reading["id"],
+                        "datahora": reading["datahora"].replace(tzinfo=None).isoformat() if reading["datahora"] else None,
+                        "empresa": reading["empresa"],
+                        "latitude": reading["camera_latitude"],
+                        "longitude": reading["camera_longitude"],
+                        "sentido": reading["sentido"],
+                        "bairro": reading["bairro"],
+                        "localidade": reading["localidade"],
+                        "velocidade": reading["velocidade"],
+                        "id_ponto_coleta": reading["id_ponto_coleta"],
+                        "camera_numero": reading["camera_numero"]
+                    }
+                    for reading in row.leituras_placas_similares if reading.get("id")],
                 "pares_suspeitos_trilhas": [
                     {
                         "id_anterior": par["id_anterior"],
@@ -366,3 +439,42 @@ def apply_intermediate_and_last_detections_tracks(leituras, ancoras, trilha_a, t
             i += 1
 
         return
+
+
+def get_possible_reading_error_plate(
+        trilha: list[dict],
+        leituras_placas_similares: list[dict]
+        ):
+    total_possible_errors = 0
+    similar_plates = {}
+
+    for reading in trilha:
+        for similar_reading in leituras_placas_similares:
+            if reading["datahora"] < similar_reading["datahora"] and \
+                intervalo_horas(reading, similar_reading) < 0.2 and \
+                custo_trecho(reading, similar_reading) < 2:
+                total_possible_errors += 1
+                plate = similar_reading["placa"]
+                if not similar_plates.get(plate):
+                    similar_plates[plate] = 1
+                else:
+                    similar_plates[plate] += 1
+
+            elif reading["datahora"] > similar_reading["datahora"] and \
+                intervalo_horas(similar_reading, reading) < 0.2 and \
+                custo_trecho(similar_reading, reading) < 2:
+                total_possible_errors += 1
+                plate = similar_reading["placa"]
+                if not similar_plates.get(plate):
+                    similar_plates[plate] = 1
+                else:
+                    similar_plates[plate] += 1
+
+    if total_possible_errors > 0 and \
+        total_possible_errors/len(trilha) > 0.4:
+        plate = max(similar_plates, key=similar_plates.get)
+        proportion = similar_plates[plate]/len(trilha)
+        if proportion > 0.2:
+            return plate, proportion
+
+    return None, 0

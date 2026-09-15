@@ -7,6 +7,37 @@ import numpy as np
 from constants import *
 
 
+def get_plate_variations(plate: str):
+    confuse_chars = [
+        ("O", "Q"),
+        ("Y", "V"),
+        ("C", "G"),
+        ("H", "M"),
+        ("M", "N"),
+        ("M", "W"),
+        ("V", "W"),
+        ("I", "1"),
+        ("7", "1"),
+        ("7", "I"),
+        ("8", "9"),
+        ("0", "8"),
+        ("6", "0"),
+        ("6", "8"),
+        ("6", "5"),
+        ("A", "4")
+    ]
+    variations = set()
+    for index, char in enumerate(plate):
+        for pair in confuse_chars:
+            if char == pair[0]:
+                variation = plate[:index] + pair[1] + plate[index + 1:]
+                variations.add(variation)
+            elif char == pair[1]:
+                variation = plate[:index] + pair[0] + plate[index + 1:]
+                variations.add(variation)
+    return list(variations)
+
+
 def haversine_km(reading_1: dict, reading_2: dict) -> float:
     """Distância aproximada em quilômetros (círculo máximo) entre duas coordenadas.
     """
@@ -49,6 +80,7 @@ def is_spike(reading_1, reading_2, reading_3):
         and delta_ac_min <= JANELA_RETORNO_SPIKE_CAUDA_MIN
     )
 
+
 def get_detection_track(
         plate_detections: list[dict],
         detection: dict,
@@ -82,7 +114,6 @@ def get_detection_track(
 
         cost_next_a = custo_trecho(detection, next_a)
         cost_next_b = custo_trecho(detection, next_b)
-
 
     cost_total_a = cost_prev_a + cost_next_a
     cost_total_b = cost_prev_b + cost_next_b

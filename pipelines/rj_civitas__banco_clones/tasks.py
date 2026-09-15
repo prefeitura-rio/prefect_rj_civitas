@@ -17,7 +17,8 @@ from pipelines.rj_civitas__banco_clones.subtasks import (
     separate_suspect_pairs_into_tracks,
     create_anchors,
     get_valid_segment,
-    apply_intermediate_and_last_detections_tracks
+    apply_intermediate_and_last_detections_tracks,
+    get_possible_reading_error_plate
 )
 from pipelines.rj_civitas__banco_clones.utils import (
     get_detection_track
@@ -76,6 +77,7 @@ def get_tracks_task(
         placa = row["placa"]
         dia = row["dia"]
         leituras = row["leituras"]
+        leituras_placas_similares = row["leituras_placas_similares"]
         pares_suspeitos = row["pares_suspeitos_trilhas"]
         ambiguos = []
 
@@ -99,6 +101,17 @@ def get_tracks_task(
                 ambiguos = leituras[:first_anchor_index]
 
         apply_intermediate_and_last_detections_tracks(leituras, ancoras, trilha_a, trilha_b, ambiguos)
+
+        possible_reading_error_plate_a, proportion_error_a = get_possible_reading_error_plate(trilha_a, leituras_placas_similares)
+        possible_reading_error_plate_b, proportion_error_b = get_possible_reading_error_plate(trilha_b, leituras_placas_similares)
+        possible_reading_error_plate = possible_reading_error_plate_a
+        if proportion_error_b > proportion_error_a:
+            possible_reading_error_plate = possible_reading_error_plate_b
+
+        if possible_reading_error_plate:
+            error_plate_trail = [reading for reading in leituras_placas_similares if reading["placa"]==possible_reading_error_plate]
+        else:
+            error_plate_trail = []
 
         has_image_a = has_image_b = False
 
@@ -124,7 +137,10 @@ def get_tracks_task(
             "trilha_a": trilha_a,
             "trilha_b": trilha_b,
             "deteccoes_ambiguas": ambiguos,
-            "visualmente_verificavel": has_image_a and has_image_b
+            "visualmente_verificavel": has_image_a and has_image_b,
+            "possivel_erro_leitura": possible_reading_error_plate is not None,
+            "possivel_placa_confundida": possible_reading_error_plate,
+            "trilha_placa_confundida": error_plate_trail
         })
     log("Tracks successfully separated")
     return tracks_data
@@ -142,9 +158,13 @@ def upload_to_table_task(
       **Descrição**: Tabela com as trilhas prováveis percorridas por cada veículo em cada dia suspeito dentre as placas presentes no banco de clones.
         A placa é considerada suspeita no dia se passou pelos filtros do banco_clones_dia, a saber:
         -Mínimo de 4 detecções suspeitas no dia
+        -Distância máxima entre pares suspeitos >= 10km ou velocidade máxima entre pares suspeitos >= 150km/h
         -Score de trajeto < 90
         -Score OCR < 60 ou Score de trajeto <=10 (trajetos muito claros e naturais superam uma placa muito passível de erros de leitura)
 
+        Além disso, se houver uma placa semelhante, com até um dígito confundível (O, Q, por exemplo) de diferença,
+        com detecções próximas às de uma das trilhas, o registro é marcado como 'possivel_erro_leitura' e a
+        placa semelhante é salva em 'possivel_placa_confundida'
       **Frequência de atualização**: Diária
       **Origem**: rj-civitas.cerco_digital.vw_all_readings, rj-civitas.banco_clones_staging.pares_suspeitos, rj-civitas.banco_clones.banco_clones_dia
       **Publicado por**: Jorge Mendes
@@ -213,6 +233,27 @@ def upload_to_table_task(
                 ],
             ),
             bigquery.SchemaField(name="visualmente_verificavel", field_type="BOOLEAN", mode="NULLABLE", description="Possui ao menos uma detecção verificável visualmente em cada uma das trilhas"),
+            bigquery.SchemaField(name="possivel_erro_leitura", field_type="BOOLEAN", mode="NULLABLE", description="Tem possibilidade de ser um falso positivo por leitura errada de placa"),
+            bigquery.SchemaField(name="possivel_placa_confundida", field_type="STRING", mode="NULLABLE", description="Possível placa confundida na leitura"),
+            bigquery.SchemaField(
+                            name="trilha_placa_confundida",
+                            field_type="STRUCT",
+                            mode="REPEATED",
+                            description="Lista ordenada de detecções da placa possivelmente confundida na leitura",
+                            fields=[
+                                bigquery.SchemaField(name="id", field_type="STRING", mode="NULLABLE"),
+                                bigquery.SchemaField(name="datahora", field_type="TIMESTAMP", mode="NULLABLE"),
+                                bigquery.SchemaField(name="empresa", field_type="STRING", mode="NULLABLE"),
+                                bigquery.SchemaField(name="latitude", field_type="FLOAT", mode="NULLABLE"),
+                                bigquery.SchemaField(name="longitude", field_type="FLOAT", mode="NULLABLE"),
+                                bigquery.SchemaField(name="sentido", field_type="STRING", mode="NULLABLE"),
+                                bigquery.SchemaField(name="bairro", field_type="STRING", mode="NULLABLE"),
+                                bigquery.SchemaField(name="localidade", field_type="STRING", mode="NULLABLE"),
+                                bigquery.SchemaField(name="velocidade", field_type="FLOAT", mode="NULLABLE"),
+                                bigquery.SchemaField(name="id_ponto_coleta", field_type="STRING", mode="NULLABLE"),
+                                bigquery.SchemaField(name="camera_numero", field_type="STRING", mode="NULLABLE")
+                            ],
+                        ),
             bigquery.SchemaField(name="timestamp_insercao", field_type="TIMESTAMP", mode="REQUIRED", description="Timestamp UTC da inserção do registro nesta tabela")
             ]
 

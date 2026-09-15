@@ -3,7 +3,7 @@
 This flow is used to dump the database to the BIGQUERY
 """
 
-from typing import Literal, Any
+from typing import Literal
 
 from iplanrio.pipelines_utils.env import inject_bd_credentials_task, getenv_or_action
 from iplanrio.pipelines_utils.prefect import rename_current_flow_run_task, log
@@ -30,7 +30,7 @@ def rj_civitas__banco_clones(
     trilhas_table_id: str = "trilhas_clones_dia",
     dbt_select: str = "banco_clones_staging banco_clones",
     mode: Literal["dev", "prod", "staging"] = "staging",
-    start_date: str = "2026-08-01",
+    start_date: str = "2026-01-01",
     write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"] = "WRITE_APPEND",
     github_repo: str = "https://github.com/prefeitura-rio/pipelines_rj_civitas",
     gcs_buckets: dict[str, str] | None = {
