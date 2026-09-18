@@ -24,7 +24,8 @@ def save_data_in_bq_table(
         insert_timestamp_field: str | None = None,
         clustering_fields: list[str] | None = None,
         partition_field: str | None = None,
-        partition_granularity: Literal["HOUR", "DAY", "MONTH", "YEAR"] = "MONTH"
+        partition_granularity: Literal["HOUR", "DAY", "MONTH", "YEAR"] = "MONTH",
+        max_bad_records: int = 0
 ) -> None:
     table_full_name = f"{project_id}.{dataset_id}.{table_id}"
     client = bigquery.Client(project=project_id)
@@ -55,6 +56,9 @@ def save_data_in_bq_table(
         job_config.schema_update_options = [
                 bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION
             ]
+
+    if max_bad_records > 0:
+        job_config.max_bad_records = max_bad_records
 
     try:
         job = client.load_table_from_json(data, table_full_name, job_config=job_config)
