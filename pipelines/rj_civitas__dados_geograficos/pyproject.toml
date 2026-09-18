@@ -1,0 +1,12 @@
+[project]
+name = "rj_civitas__dados_geograficos"
+version = "0.1.0"
+description = "Pipeline dados_geograficos da secretaria civitas"
+dependencies = [
+    "geobr>=2.0.1",
+    "prefect_rj_civitas",
+    "shapely>=2.1.2",
+]
+
+[tool.uv.sources]
+prefect_rj_civitas = { workspace = true }
