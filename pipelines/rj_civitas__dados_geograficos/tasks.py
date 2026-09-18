@@ -83,7 +83,7 @@ def load_bairros_rj_to_table_task(
     schema_bairros = [
         bigquery.SchemaField("id_municipio", "STRING", mode="NULLABLE"),
         bigquery.SchemaField("nome_municipio", "STRING", mode="REQUIRED"),
-        bigquery.SchemaField("id_bairro", "INTEGER", mode="NULLABLE"),
+        bigquery.SchemaField("id_bairro", "STRING", mode="NULLABLE"),
         bigquery.SchemaField("nome_bairro", "STRING", mode="REQUIRED"),
         bigquery.SchemaField("geometria", "GEOGRAPHY", mode="REQUIRED"),
         bigquery.SchemaField("timestamp_insercao", "TIMESTAMP", mode="REQUIRED"),

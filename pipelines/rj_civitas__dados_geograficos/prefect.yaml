@@ -48,3 +48,5 @@ deployments:
         command: uv run --package rj_civitas__dados_geograficos -- prefect flow-run execute
         secretName: prefect-jobs-secrets # pragma: allowlist secret
         image_pull_policy: Always
+      parameters:
+        mode: prod
