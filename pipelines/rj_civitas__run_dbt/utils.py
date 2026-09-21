@@ -45,7 +45,7 @@ async def send_discord_webhook(
     if len(text_content) > 2000:
         raise ValueError(f"Message content is too long: {len(text_content)} > 2000 characters.")
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
         kwargs = {"content": text_content, "allowed_mentions": AllowedMentions(users=True)}
         if username:
             kwargs["username"] = username
@@ -58,10 +58,13 @@ async def send_discord_webhook(
                 kwargs["embed"] = embed
 
             kwargs["file"] = file
-
         webhook = Webhook.from_url(webhook_url, session=session)
         try:
             await webhook.send(**kwargs)
+        except asyncio.TimeoutError:
+            raise ValueError(f"Timeout sending message to Discord webhook: {webhook_url}")
+        except aiohttp.ClientError:
+            raise ValueError(f"Connection error while sending message to Discord webhook: {webhook_url}")
         except RuntimeError:
             raise ValueError(f"Error sending message to Discord webhook: {webhook_url}")
 
