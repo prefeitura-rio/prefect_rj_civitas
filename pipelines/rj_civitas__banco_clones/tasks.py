@@ -2,7 +2,7 @@
 """
 Tasks da pipeline banco_clones.
 """
-from google.cloud import bigquery
+from google.cloud import bigquery, storage
 from iplanrio.pipelines_utils.logging import log
 from prefect import task
 from typing import Any, Dict, List, Literal
@@ -18,10 +18,14 @@ from pipelines.rj_civitas__banco_clones.subtasks import (
     create_anchors,
     get_valid_segment,
     apply_intermediate_and_last_detections_tracks,
-    get_possible_reading_error_plate
+    get_possible_reading_error_plate,
+    enrich_with_gabriel_images
 )
 from pipelines.rj_civitas__banco_clones.utils import (
     get_detection_track
+)
+from pipelines.rj_civitas__banco_clones.token_manager import (
+    TokenManager
 )
 
 @task
@@ -63,16 +67,25 @@ def get_readings_task(
         pares_suspeitos_table_id=pares_suspeitos_full_table_id,
         start_date=resolved_start_date
         )
-
     return readings
 
 
 @task
 def get_tracks_task(
-    readings: dict
+    readings: dict,
+    get_gabriel_images: bool,
+    gabriel_api_url: str,
+    gabriel_api_client_id: str,
+    gabriel_api_client_secret: str,
+    gabriel_images_bucket: str
 ):
     log("Separating tracks...")
     tracks_data = []
+    if get_gabriel_images:
+        gabriel_api_token = TokenManager(gabriel_api_url, gabriel_api_client_id, gabriel_api_client_secret)
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(gabriel_images_bucket)
+
     for row in readings:
         placa = row["placa"]
         dia = row["dia"]
@@ -113,18 +126,56 @@ def get_tracks_task(
         else:
             error_plate_trail = []
 
-        has_image_a = has_image_b = False
+        if get_gabriel_images:
+            trilha_a = enrich_with_gabriel_images(
+                placa,
+                trilha_a,
+                gabriel_api_url,
+                gabriel_api_client_id,
+                gabriel_api_client_secret,
+                gabriel_api_token,
+                bucket
+                )
+            trilha_b = enrich_with_gabriel_images(
+                placa,
+                trilha_b,
+                gabriel_api_url,
+                gabriel_api_client_id,
+                gabriel_api_client_secret,
+                gabriel_api_token,
+                bucket
+                )
+            ambiguos = enrich_with_gabriel_images(
+                placa,
+                ambiguos,
+                gabriel_api_url,
+                gabriel_api_client_id,
+                gabriel_api_client_secret,
+                gabriel_api_token,
+                bucket
+                )
+            if possible_reading_error_plate:
+                error_plate_trail = enrich_with_gabriel_images(
+                    possible_reading_error_plate,
+                    error_plate_trail,
+                    gabriel_api_url,
+                    gabriel_api_client_id,
+                    gabriel_api_client_secret,
+                    gabriel_api_token,
+                    bucket
+                    )
 
+        has_image_a = has_image_b = False
         for detection in trilha_a:
             if not detection.get("suspeito"):
                 detection["suspeito"] = False
-            if detection["empresa"] == "CIVITAS":
+            if detection["empresa"] == "CIVITAS" or (detection["empresa"] == "GABRIEL" and detection.get("link_imagem") is not None):
                 has_image_a = True
 
         for detection in trilha_b:
             if not detection.get("suspeito"):
                 detection["suspeito"] = False
-            if detection["empresa"] == "CIVITAS":
+            if detection["empresa"] == "CIVITAS" or (detection["empresa"] == "GABRIEL" and detection.get("link_imagem") is not None):
                 has_image_b = True
 
         trilha_a.sort(key=lambda x: x["datahora"])
@@ -179,7 +230,7 @@ def upload_to_table_task(
                 mode="REPEATED",
                 description="Lista ordenada de detecções associadas ao veículo A",
                 fields=[
-                    bigquery.SchemaField(name="id", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="id_evento", field_type="STRING", mode="NULLABLE"),
                     bigquery.SchemaField(name="datahora", field_type="TIMESTAMP", mode="NULLABLE"),
                     bigquery.SchemaField(name="empresa", field_type="STRING", mode="NULLABLE"),
                     bigquery.SchemaField(name="latitude", field_type="FLOAT", mode="NULLABLE"),
@@ -190,7 +241,8 @@ def upload_to_table_task(
                     bigquery.SchemaField(name="velocidade", field_type="FLOAT", mode="NULLABLE"),
                     bigquery.SchemaField(name="id_ponto_coleta", field_type="STRING", mode="NULLABLE"),
                     bigquery.SchemaField(name="camera_numero", field_type="STRING", mode="NULLABLE"),
-                    bigquery.SchemaField(name="suspeito", field_type="BOOLEAN", mode="NULLABLE")
+                    bigquery.SchemaField(name="suspeito", field_type="BOOLEAN", mode="NULLABLE"),
+                    bigquery.SchemaField(name="link_imagem", field_type="STRING", mode="NULLABLE")
                 ],
             ),
             bigquery.SchemaField(
@@ -199,7 +251,7 @@ def upload_to_table_task(
                 mode="REPEATED",
                 description="Lista ordenada de detecções associadas ao veículo B",
                 fields=[
-                    bigquery.SchemaField(name="id", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="id_evento", field_type="STRING", mode="NULLABLE"),
                     bigquery.SchemaField(name="datahora", field_type="TIMESTAMP", mode="NULLABLE"),
                     bigquery.SchemaField(name="empresa", field_type="STRING", mode="NULLABLE"),
                     bigquery.SchemaField(name="latitude", field_type="FLOAT", mode="NULLABLE"),
@@ -210,7 +262,8 @@ def upload_to_table_task(
                     bigquery.SchemaField(name="velocidade", field_type="FLOAT", mode="NULLABLE"),
                     bigquery.SchemaField(name="id_ponto_coleta", field_type="STRING", mode="NULLABLE"),
                     bigquery.SchemaField(name="camera_numero", field_type="STRING", mode="NULLABLE"),
-                    bigquery.SchemaField(name="suspeito", field_type="BOOLEAN", mode="NULLABLE")
+                    bigquery.SchemaField(name="suspeito", field_type="BOOLEAN", mode="NULLABLE"),
+                    bigquery.SchemaField(name="link_imagem", field_type="STRING", mode="NULLABLE")
                 ],
             ),
             bigquery.SchemaField(
@@ -219,7 +272,7 @@ def upload_to_table_task(
                 mode="REPEATED",
                 description="Lista ordenada de detecções que não podem ser associadas claramente a uma das duas trilhas",
                 fields=[
-                    bigquery.SchemaField(name="id", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="id_evento", field_type="STRING", mode="NULLABLE"),
                     bigquery.SchemaField(name="datahora", field_type="TIMESTAMP", mode="NULLABLE"),
                     bigquery.SchemaField(name="empresa", field_type="STRING", mode="NULLABLE"),
                     bigquery.SchemaField(name="latitude", field_type="FLOAT", mode="NULLABLE"),
@@ -229,7 +282,8 @@ def upload_to_table_task(
                     bigquery.SchemaField(name="localidade", field_type="STRING", mode="NULLABLE"),
                     bigquery.SchemaField(name="velocidade", field_type="FLOAT", mode="NULLABLE"),
                     bigquery.SchemaField(name="id_ponto_coleta", field_type="STRING", mode="NULLABLE"),
-                    bigquery.SchemaField(name="camera_numero", field_type="STRING", mode="NULLABLE")
+                    bigquery.SchemaField(name="camera_numero", field_type="STRING", mode="NULLABLE"),
+                    bigquery.SchemaField(name="link_imagem", field_type="STRING", mode="NULLABLE")
                 ],
             ),
             bigquery.SchemaField(name="visualmente_verificavel", field_type="BOOLEAN", mode="NULLABLE", description="Possui ao menos uma detecção verificável visualmente em cada uma das trilhas"),
@@ -241,7 +295,7 @@ def upload_to_table_task(
                             mode="REPEATED",
                             description="Lista ordenada de detecções da placa possivelmente confundida na leitura",
                             fields=[
-                                bigquery.SchemaField(name="id", field_type="STRING", mode="NULLABLE"),
+                                bigquery.SchemaField(name="id_evento", field_type="STRING", mode="NULLABLE"),
                                 bigquery.SchemaField(name="datahora", field_type="TIMESTAMP", mode="NULLABLE"),
                                 bigquery.SchemaField(name="empresa", field_type="STRING", mode="NULLABLE"),
                                 bigquery.SchemaField(name="latitude", field_type="FLOAT", mode="NULLABLE"),
@@ -251,7 +305,8 @@ def upload_to_table_task(
                                 bigquery.SchemaField(name="localidade", field_type="STRING", mode="NULLABLE"),
                                 bigquery.SchemaField(name="velocidade", field_type="FLOAT", mode="NULLABLE"),
                                 bigquery.SchemaField(name="id_ponto_coleta", field_type="STRING", mode="NULLABLE"),
-                                bigquery.SchemaField(name="camera_numero", field_type="STRING", mode="NULLABLE")
+                                bigquery.SchemaField(name="camera_numero", field_type="STRING", mode="NULLABLE"),
+                                bigquery.SchemaField(name="link_imagem", field_type="STRING", mode="NULLABLE")
                             ],
                         ),
             bigquery.SchemaField(name="timestamp_insercao", field_type="TIMESTAMP", mode="REQUIRED", description="Timestamp UTC da inserção do registro nesta tabela")

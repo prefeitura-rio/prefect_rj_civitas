@@ -1,17 +1,29 @@
 # -*- coding: utf-8 -*-
-from google.cloud import bigquery
+import time
+from google.cloud import bigquery, storage
 from google.api_core.exceptions import NotFound
 from iplanrio.pipelines_utils.logging import log
 
 from utils import (
+    get_gabriel_full_image_link,
+    get_storage_link_if_exists,
+    upload_gabriel_image,
     haversine_km,
     custo_trecho,
     is_spike,
     get_detection_track,
-    get_plate_variations,
     intervalo_horas
 )
-from constants import CUSTO_INVIAVEL, DIST_MAX_ALTERNATIVA_KM
+from constants import (
+    CUSTO_INVIAVEL,
+    DIST_MAX_ALTERNATIVA_KM,
+    PROPORCAO_PLACAS_CONFUNDIVEIS_PROXIMAS,
+    PROPORCAO_PRINCIPAL_PLACA_CONFUNDIVEL,
+    INTERVALO_HORAS_MAXIMO_PLACA_CONFUNDIVEL,
+    DISTANCIA_KM_MAXIMA_PLACA_CONFUNDIVEL
+)
+
+from token_manager import TokenManager
 
 
 def resolve_start_date(
@@ -91,35 +103,11 @@ def get_plates_readings(
         for plate, days in plates_days.items()
         for day in days
     )
-    variation_string_plates_days_list = ", ".join(
-            f"'{variation}{day.isoformat()}'"
-            for plate, days in plates_days.items()
-            for day in days
-            for variation in get_plate_variations(plate)
-        )
-
-    all_string_plates_days_list = suspect_string_plates_days_list + ", " + variation_string_plates_days_list
-
-    plates_variations = ", ".join(
-    f"STRUCT("
-    f"'{plate}' AS placa, "
-    f"'{variation}' AS variacao"
-    f")"
-    for plate in plates_days
-    for variation in get_plate_variations(plate)
-    )
     query_plates_readings = f"""
-        WITH placas_variacoes AS (
-        SELECT
-            placa,
-            variacao
-        FROM UNNEST([
-            {plates_variations}
-        ])
-        ),
-
+        WITH
         leituras_validas AS (
         SELECT
+            id_evento,
             placa,
             DATE(datahora, 'America/Sao_Paulo') AS data_dia,
             CONCAT(camera_numero, CAST(datahora AS STRING)) AS id,
@@ -137,15 +125,15 @@ def get_plates_readings(
             WHERE datahora >= TIMESTAMP('{start_date}', 'America/Sao_Paulo')
             AND datahora < TIMESTAMP(CURRENT_DATE(), 'America/Sao_Paulo')
             AND datahora < TIMESTAMP(DATE_ADD(CAST('{start_date}' AS DATE), INTERVAL 30 DAY), 'America/Sao_Paulo')
-            AND CONCAT(placa, CAST(DATE(datahora, 'America/Sao_Paulo') AS STRING)) IN ({all_string_plates_days_list})
         ),
 
-        leituras_validas_struct AS (
+        leituras_validas_placas_suspeitas_struct AS (
         SELECT
             placa,
             data_dia,
             ARRAY_AGG(
                 STRUCT(
+                    id_evento,
                     id,
                     datahora,
                     empresa,
@@ -161,6 +149,7 @@ def get_plates_readings(
                 ORDER BY datahora
             ) AS leituras
         FROM leituras_validas
+        WHERE CONCAT(placa, CAST(data_dia AS STRING)) IN ({suspect_string_plates_days_list})
         GROUP BY placa, data_dia
         ),
 
@@ -171,27 +160,25 @@ def get_plates_readings(
                     a.leituras,
                     ARRAY_AGG(
                         STRUCT(
-                            c.placa,
-                            c.id,
-                            c.datahora,
-                            c.empresa,
-                            c.sentido,
-                            c.bairro,
-                            c.localidade,
-                            c.velocidade,
-                            c.camera_latitude,
-                            c.camera_longitude,
-                            c.id_ponto_coleta,
-                            c.camera_numero
+                            b.placa,
+                            b.id_evento,
+                            b.datahora,
+                            b.empresa,
+                            b.sentido,
+                            b.bairro,
+                            b.localidade,
+                            b.velocidade,
+                            b.camera_latitude,
+                            b.camera_longitude,
+                            b.id_ponto_coleta,
+                            b.camera_numero
                         )
                         IGNORE NULLS
-                        ORDER BY c.datahora
+                        ORDER BY b.datahora
                     ) AS leituras_placas_similares
-                FROM leituras_validas_struct a
-                LEFT JOIN placas_variacoes b
-                ON a.placa = b.placa
-                LEFT JOIN leituras_validas c
-                ON c.placa = b.variacao AND a.data_dia = c.data_dia
+                FROM leituras_validas_placas_suspeitas_struct a
+                LEFT JOIN leituras_validas b
+                ON a.data_dia = b.data_dia AND EDIT_DISTANCE(a.placa, b.placa) = 1
                 GROUP BY a.placa, a.data_dia, a.leituras
                 ),
 
@@ -274,6 +261,7 @@ def get_plates_readings(
                 "dia": row.data_dia.isoformat(),
                 "leituras": [
                     {
+                        "id_evento": reading["id_evento"],
                         "id": reading["id"],
                         "datahora": reading["datahora"].replace(tzinfo=None).isoformat(),
                         "empresa": reading["empresa"],
@@ -290,8 +278,8 @@ def get_plates_readings(
                 "leituras_placas_similares": [
                     {
                         "placa": reading["placa"],
-                        "id": reading["id"],
-                        "datahora": reading["datahora"].replace(tzinfo=None).isoformat() if reading["datahora"] else None,
+                        "id_evento": reading["id_evento"],
+                        "datahora": reading["datahora"].replace(tzinfo=None).isoformat(),
                         "empresa": reading["empresa"],
                         "latitude": reading["camera_latitude"],
                         "longitude": reading["camera_longitude"],
@@ -302,7 +290,7 @@ def get_plates_readings(
                         "id_ponto_coleta": reading["id_ponto_coleta"],
                         "camera_numero": reading["camera_numero"]
                     }
-                    for reading in row.leituras_placas_similares if reading.get("id")],
+                    for reading in row.leituras_placas_similares if reading.get("id_evento")],
                 "pares_suspeitos_trilhas": [
                     {
                         "id_anterior": par["id_anterior"],
@@ -315,6 +303,44 @@ def get_plates_readings(
                 })
     log("Readings successfully retrieved")
     return filtered_readings
+
+
+def enrich_with_gabriel_images(
+        plate: str,
+        readings: list,
+        gabriel_api_url: str,
+        gabriel_api_token: TokenManager,
+        bucket: storage.Bucket
+        ):
+    wait_time = 0.3
+    for reading in readings:
+        if reading["empresa"] != "GABRIEL":
+            continue
+
+        storage_image_link = get_storage_link_if_exists(
+            bucket,
+            plate,
+            reading["datahora"],
+            reading["id_evento"])
+        if storage_image_link:
+            reading["link_imagem"] = storage_image_link  # Evita baixar a imagem novamente se ela já existe.
+            continue
+
+        gabriel_image_link = get_gabriel_full_image_link(   # Atualiza o token se necessário
+            base_url=gabriel_api_url,
+            id_evento=reading["id_evento"],
+            gabriel_token=gabriel_api_token
+            )
+        if not gabriel_image_link:
+            time.sleep(wait_time)
+            continue
+
+        storage_image_link = upload_gabriel_image(bucket, gabriel_image_link, plate, reading["datahora"], reading["id_evento"])
+        if storage_image_link:
+            reading["link_imagem"] = storage_image_link
+        time.sleep(wait_time)
+
+    return readings
 
 
 def separate_suspect_pairs_into_tracks(
@@ -451,8 +477,8 @@ def get_possible_reading_error_plate(
     for reading in trilha:
         for similar_reading in leituras_placas_similares:
             if reading["datahora"] < similar_reading["datahora"] and \
-                intervalo_horas(reading, similar_reading) < 0.2 and \
-                custo_trecho(reading, similar_reading) < 2:
+                intervalo_horas(reading, similar_reading) < INTERVALO_HORAS_MAXIMO_PLACA_CONFUNDIVEL and \
+                custo_trecho(reading, similar_reading) < DISTANCIA_KM_MAXIMA_PLACA_CONFUNDIVEL:
                 total_possible_errors += 1
                 plate = similar_reading["placa"]
                 if not similar_plates.get(plate):
@@ -461,8 +487,8 @@ def get_possible_reading_error_plate(
                     similar_plates[plate] += 1
 
             elif reading["datahora"] > similar_reading["datahora"] and \
-                intervalo_horas(similar_reading, reading) < 0.2 and \
-                custo_trecho(similar_reading, reading) < 2:
+                intervalo_horas(similar_reading, reading) < INTERVALO_HORAS_MAXIMO_PLACA_CONFUNDIVEL and \
+                custo_trecho(similar_reading, reading) < DISTANCIA_KM_MAXIMA_PLACA_CONFUNDIVEL:
                 total_possible_errors += 1
                 plate = similar_reading["placa"]
                 if not similar_plates.get(plate):
@@ -471,10 +497,10 @@ def get_possible_reading_error_plate(
                     similar_plates[plate] += 1
 
     if total_possible_errors > 0 and \
-        total_possible_errors/len(trilha) > 0.4:
+        total_possible_errors/len(trilha) > PROPORCAO_PLACAS_CONFUNDIVEIS_PROXIMAS:
         plate = max(similar_plates, key=similar_plates.get)
         proportion = similar_plates[plate]/len(trilha)
-        if proportion > 0.2:
+        if proportion > PROPORCAO_PRINCIPAL_PLACA_CONFUNDIVEL:
             return plate, proportion
 
     return None, 0

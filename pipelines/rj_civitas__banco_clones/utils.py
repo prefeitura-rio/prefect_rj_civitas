@@ -1,41 +1,146 @@
 # -*- coding: utf-8 -*-
 from iplanrio.pipelines_utils.logging import log
 from datetime import datetime
-from typing import Literal
+from google.cloud import storage
+from typing import Literal, Optional
 import numpy as np
+import requests
 
 from constants import *
 
+from token_manager import TokenManager
 
-def get_plate_variations(plate: str):
-    confuse_chars = [
-        ("O", "Q"),
-        ("Y", "V"),
-        ("C", "G"),
-        ("H", "M"),
-        ("M", "N"),
-        ("M", "W"),
-        ("V", "W"),
-        ("I", "1"),
-        ("7", "1"),
-        ("7", "I"),
-        ("8", "9"),
-        ("0", "8"),
-        ("6", "0"),
-        ("6", "8"),
-        ("6", "5"),
-        ("A", "4")
-    ]
-    variations = set()
-    for index, char in enumerate(plate):
-        for pair in confuse_chars:
-            if char == pair[0]:
-                variation = plate[:index] + pair[1] + plate[index + 1:]
-                variations.add(variation)
-            elif char == pair[1]:
-                variation = plate[:index] + pair[0] + plate[index + 1:]
-                variations.add(variation)
-    return list(variations)
+
+def get_gabriel_full_image_link(
+        base_url: str,
+        id_evento: str,
+        gabriel_token: TokenManager
+        ) -> Optional[str]:
+    url = f"{base_url}/v1/plate-detection/{id_evento}/snapshot"
+    def request_image(token: Optional[str]) -> Optional[str]:
+        if not token:
+            log(
+                f"Error while getting Gabriel image link of event {id_evento}: "
+                "API token is missing",
+                level="warning"
+            )
+            return None
+
+        response = requests.get(
+            url=url,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=(5,30),
+        )
+        response.raise_for_status()
+
+        image_url = response.json().get("fullImageUrl")
+
+        if not image_url:
+            log(
+                f"Error while getting Gabriel image link of event {id_evento}: "
+                "fullImageUrl field is missing or empty",
+                level="warning",
+            )
+
+        return image_url
+
+    try:
+        image_url = request_image(gabriel_token.get())
+        return image_url
+
+    except requests.HTTPError as error:
+        if error.response is None or error.response.status_code != 401:
+            log(
+                f"Error while getting Gabriel image link of event {id_evento}: {error}",
+                level="warning",
+            )
+            return None
+
+        # Token expired/invalid: force refresh and retry once
+        token = gabriel_token.refresh()
+        if not token:
+            log(
+                f"Error while retrying Gabriel image link request of event "
+                f"{id_evento}: failed to refresh API token",
+                level="warning",
+            )
+            return None
+
+        try:
+            image_url = request_image(token)
+            return image_url
+
+        except (requests.RequestException, ValueError) as retry_error:
+            log(
+                f"Error while retrying Gabriel image link request of event {id_evento}: {retry_error}",
+                level="warning",
+            )
+            return None
+
+    except (requests.RequestException, ValueError) as error:
+        log(
+            f"Error while getting Gabriel image link of event {id_evento}: {error}",
+            level="warning",
+        )
+        return None
+
+
+def get_storage_link_if_exists(
+        bucket: storage.Bucket,
+        plate: str,
+        datahora: str,
+        id_evento: str
+        ):
+    datahora = datetime.fromisoformat(datahora)
+
+    filepath = f"clones/gabriel_full_images/{datahora.strftime('%Y/%m/%d')}/{plate}/{id_evento}.jpg"
+    blob = bucket.blob(filepath)
+
+    if blob.exists():
+        return f"https://storage.cloud.google.com/{bucket.name}/{filepath}"
+    return None
+
+
+def upload_gabriel_image(
+        bucket: storage.Bucket,
+        gabriel_image_link: str,
+        plate: str,
+        datahora: str,
+        id_evento: str
+        ):
+    try:
+        datahora = datetime.fromisoformat(datahora)
+        response = requests.get(gabriel_image_link, timeout=(5,30))
+        response.raise_for_status()
+        content_type = response.headers.get(
+            "Content-Type",
+            "application/octet-stream"
+        ).split(";")[0].strip()
+        if not content_type.startswith("image/"):
+            log(
+                f"Gabriel URL did not return an image: {content_type}",
+                level="warning"
+            )
+            return None
+
+        image_content = response.content
+    except Exception as e:
+        log(f"Error while getting Gabriel image of event {id_evento}: {e}", level="warning")
+        return None
+
+    try:
+        filepath = f"clones/gabriel_full_images/{datahora.strftime('%Y/%m/%d')}/{plate}/{id_evento}.jpg"
+        blob = bucket.blob(filepath)
+
+        blob.upload_from_string(
+            image_content,
+            content_type=content_type
+        )
+    except Exception as e:
+        log(f"Error while uploading Gabriel image of event {id_evento} to Storage: {e}", level="warning")
+        return None
+
+    return f"https://storage.cloud.google.com/{bucket.name}/{filepath}"
 
 
 def haversine_km(reading_1: dict, reading_2: dict) -> float:
