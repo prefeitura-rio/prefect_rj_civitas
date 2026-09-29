@@ -14,15 +14,15 @@ from token_manager import TokenManager
 def get_gabriel_full_image_link(
         base_url: str,
         id_evento: str,
-        gabriel_token: TokenManager
+        gabriel_token: TokenManager,
+        logger
         ) -> Optional[str]:
     url = f"{base_url}/v1/plate-detection/{id_evento}/snapshot"
     def request_image(token: Optional[str]) -> Optional[str]:
         if not token:
-            log(
+            logger.warning(
                 f"Error while getting Gabriel image link of event {id_evento}: "
-                "API token is missing",
-                level="warning"
+                "API token is missing"
             )
             return None
 
@@ -36,10 +36,9 @@ def get_gabriel_full_image_link(
         image_url = response.json().get("fullImageUrl")
 
         if not image_url:
-            log(
+            logger.warning(
                 f"Error while getting Gabriel image link of event {id_evento}: "
-                "fullImageUrl field is missing or empty",
-                level="warning",
+                "fullImageUrl field is missing or empty"
             )
 
         return image_url
@@ -50,19 +49,17 @@ def get_gabriel_full_image_link(
 
     except requests.HTTPError as error:
         if error.response is None or error.response.status_code != 401:
-            log(
-                f"Error while getting Gabriel image link of event {id_evento}: {error}",
-                level="warning",
+            logger.warning(
+                f"Error while getting Gabriel image link of event {id_evento}: {error}"
             )
             return None
 
         # Token expired/invalid: force refresh and retry once
         token = gabriel_token.refresh()
         if not token:
-            log(
+            logger.warning(
                 f"Error while retrying Gabriel image link request of event "
-                f"{id_evento}: failed to refresh API token",
-                level="warning",
+                f"{id_evento}: failed to refresh API token"
             )
             return None
 
@@ -71,16 +68,14 @@ def get_gabriel_full_image_link(
             return image_url
 
         except (requests.RequestException, ValueError) as retry_error:
-            log(
-                f"Error while retrying Gabriel image link request of event {id_evento}: {retry_error}",
-                level="warning",
+            logger.warning(
+                f"Error while retrying Gabriel image link request of event {id_evento}: {retry_error}"
             )
             return None
 
     except (requests.RequestException, ValueError) as error:
-        log(
-            f"Error while getting Gabriel image link of event {id_evento}: {error}",
-            level="warning",
+        logger.warning(
+            f"Error while getting Gabriel image link of event {id_evento}: {error}"
         )
         return None
 
@@ -106,7 +101,8 @@ def upload_gabriel_image(
         gabriel_image_link: str,
         plate: str,
         datahora: str,
-        id_evento: str
+        id_evento: str,
+        logger
         ):
     try:
         datahora = datetime.fromisoformat(datahora)
@@ -117,15 +113,14 @@ def upload_gabriel_image(
             "application/octet-stream"
         ).split(";")[0].strip()
         if not content_type.startswith("image/"):
-            log(
-                f"Gabriel URL did not return an image: {content_type}",
-                level="warning"
+            logger.warning(
+                f"Gabriel URL did not return an image: {content_type}"
             )
             return None
 
         image_content = response.content
     except Exception as e:
-        log(f"Error while getting Gabriel image of event {id_evento}: {e}", level="warning")
+        logger.warning(f"Error while getting Gabriel image of event {id_evento}: {e}")
         return None
 
     try:
@@ -137,7 +132,7 @@ def upload_gabriel_image(
             content_type=content_type
         )
     except Exception as e:
-        log(f"Error while uploading Gabriel image of event {id_evento} to Storage: {e}", level="warning")
+        logger.warning(f"Error while uploading Gabriel image of event {id_evento} to Storage: {e}")
         return None
 
     return f"https://storage.cloud.google.com/{bucket.name}/{filepath}"

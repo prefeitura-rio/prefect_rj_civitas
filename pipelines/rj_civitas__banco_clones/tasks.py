@@ -3,6 +3,7 @@
 Tasks da pipeline banco_clones.
 """
 from google.cloud import bigquery, storage
+from itertools import chain
 from iplanrio.pipelines_utils.logging import log
 from prefect import task
 from typing import Any, Dict, List, Literal
@@ -127,43 +128,17 @@ def get_tracks_task(
             error_plate_trail = []
 
         if get_gabriel_images:
-            trilha_a = enrich_with_gabriel_images(
+            enrich_with_gabriel_images(
                 placa,
-                trilha_a,
+                chain(
+                    trilha_a,
+                    trilha_b,
+                    ambiguos,
+                    error_plate_trail),
                 gabriel_api_url,
-                gabriel_api_client_id,
-                gabriel_api_client_secret,
                 gabriel_api_token,
                 bucket
-                )
-            trilha_b = enrich_with_gabriel_images(
-                placa,
-                trilha_b,
-                gabriel_api_url,
-                gabriel_api_client_id,
-                gabriel_api_client_secret,
-                gabriel_api_token,
-                bucket
-                )
-            ambiguos = enrich_with_gabriel_images(
-                placa,
-                ambiguos,
-                gabriel_api_url,
-                gabriel_api_client_id,
-                gabriel_api_client_secret,
-                gabriel_api_token,
-                bucket
-                )
-            if possible_reading_error_plate:
-                error_plate_trail = enrich_with_gabriel_images(
-                    possible_reading_error_plate,
-                    error_plate_trail,
-                    gabriel_api_url,
-                    gabriel_api_client_id,
-                    gabriel_api_client_secret,
-                    gabriel_api_token,
-                    bucket
-                    )
+            )
 
         has_image_a = has_image_b = False
         for detection in trilha_a:

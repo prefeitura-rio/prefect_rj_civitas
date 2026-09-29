@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
-import time
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from google.cloud import bigquery, storage
 from google.api_core.exceptions import NotFound
 from iplanrio.pipelines_utils.logging import log
+from prefect.logging import get_run_logger
 
 from utils import (
     get_gabriel_full_image_link,
@@ -305,42 +307,61 @@ def get_plates_readings(
     return filtered_readings
 
 
+def enrich_gabriel_reading_with_image(
+    reading: dict,
+    plate: str,
+    gabriel_api_url: str,
+    gabriel_api_token: TokenManager,
+    bucket: storage.Bucket,
+    logger
+):
+    if reading["empresa"] != "GABRIEL":
+        return
+
+    storage_image_link = get_storage_link_if_exists(
+        bucket,
+        plate,
+        reading["datahora"],
+        reading["id_evento"]
+        )
+    if storage_image_link:
+        reading["link_imagem"] = storage_image_link  # Evita baixar a imagem novamente se ela já existe no bucket.
+        return
+
+    gabriel_image_link = get_gabriel_full_image_link(
+        base_url=gabriel_api_url,
+        id_evento=reading["id_evento"],
+        gabriel_token=gabriel_api_token,
+        logger=logger
+        )
+    if not gabriel_image_link:
+        return
+
+    storage_image_link = upload_gabriel_image(bucket, gabriel_image_link, plate, reading["datahora"], reading["id_evento"], logger)
+    if storage_image_link:
+        reading["link_imagem"] = storage_image_link
+    return
+
+
 def enrich_with_gabriel_images(
         plate: str,
-        readings: list,
+        readings,
         gabriel_api_url: str,
         gabriel_api_token: TokenManager,
         bucket: storage.Bucket
         ):
-    wait_time = 0.3
-    for reading in readings:
-        if reading["empresa"] != "GABRIEL":
-            continue
-
-        storage_image_link = get_storage_link_if_exists(
-            bucket,
-            plate,
-            reading["datahora"],
-            reading["id_evento"])
-        if storage_image_link:
-            reading["link_imagem"] = storage_image_link  # Evita baixar a imagem novamente se ela já existe.
-            continue
-
-        gabriel_image_link = get_gabriel_full_image_link(   # Atualiza o token se necessário
-            base_url=gabriel_api_url,
-            id_evento=reading["id_evento"],
-            gabriel_token=gabriel_api_token
-            )
-        if not gabriel_image_link:
-            time.sleep(wait_time)
-            continue
-
-        storage_image_link = upload_gabriel_image(bucket, gabriel_image_link, plate, reading["datahora"], reading["id_evento"])
-        if storage_image_link:
-            reading["link_imagem"] = storage_image_link
-        time.sleep(wait_time)
-
-    return readings
+    logger = get_run_logger()
+    fixed_params = partial(
+        enrich_gabriel_reading_with_image,
+        plate=plate,
+        gabriel_api_url=gabriel_api_url,
+        gabriel_api_token=gabriel_api_token,
+        bucket=bucket,
+        logger=logger
+        )
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        list( executor.map(fixed_params, readings) )  # Apenas executa sem retornar nada, os objetos são alterados na função
+    return
 
 
 def separate_suspect_pairs_into_tracks(
