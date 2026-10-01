@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from functools import partial
 from google.cloud import bigquery, storage
 from google.api_core.exceptions import NotFound
@@ -27,6 +29,8 @@ from constants import (
 
 from token_manager import TokenManager
 
+
+tz_sp = ZoneInfo("America/Sao_Paulo")
 
 def resolve_start_date(
         bq_client: bigquery.Client,
@@ -328,18 +332,23 @@ def enrich_gabriel_reading_with_image(
         reading["link_imagem"] = storage_image_link  # Evita baixar a imagem novamente se ela já existe no bucket.
         return
 
-    gabriel_image_link = get_gabriel_full_image_link(
-        base_url=gabriel_api_url,
-        id_evento=reading["id_evento"],
-        gabriel_token=gabriel_api_token,
-        logger=logger
-        )
-    if not gabriel_image_link:
-        return
+    if datetime.fromisoformat(reading["datahora"])\
+        .replace(tzinfo=timezone.utc)\
+        .astimezone(tz_sp)\
+        .date() \
+        >= datetime.now(tz_sp).date() - timedelta(days=5):
+        gabriel_image_link = get_gabriel_full_image_link(
+            base_url=gabriel_api_url,
+            id_evento=reading["id_evento"],
+            gabriel_token=gabriel_api_token,
+            logger=logger
+            )
+        if not gabriel_image_link:
+            return
 
-    storage_image_link = upload_gabriel_image(bucket, gabriel_image_link, plate, reading["datahora"], reading["id_evento"], logger)
-    if storage_image_link:
-        reading["link_imagem"] = storage_image_link
+        storage_image_link = upload_gabriel_image(bucket, gabriel_image_link, plate, reading["datahora"], reading["id_evento"], logger)
+        if storage_image_link:
+            reading["link_imagem"] = storage_image_link
     return
 
 
