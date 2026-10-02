@@ -228,9 +228,9 @@ def load_to_table_task(
 
 
 @task
-def get_dd_data(start_date: str):
+def get_dd_data(project_id: str, target_dd_table: str,  start_date: str):
     client = bigquery.Client()
-    query_last_date = "SELECT MAX(data_denuncia) as ultima_data FROM `rj-civitas-dev.alerta_contexto_eleicoes.alerta_eleicoes_disque_denuncia`"
+    query_last_date = f"SELECT MAX(data_denuncia) as ultima_data FROM `{project_id}.alerta_contexto_eleicoes.{target_dd_table}`"
     last_date = start_date
     try:
         last_date_query_job = client.query(query_last_date)
