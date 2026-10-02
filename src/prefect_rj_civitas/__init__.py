@@ -8,6 +8,7 @@ from .tasks.prefect_deployment import run_deployment_task
 from .tasks.flow_control import skip_if_already_running
 from .tasks.external_tables import upload_data_to_storage_task, create_external_storage_table_task
 from .tasks.utils import save_data_in_bq_table
+from .tasks.elections_context_alerts import send_elections_context_alerts
 
 __all__ = [
     "get_pipeline_secrets_task",
@@ -17,5 +18,6 @@ __all__ = [
     "skip_if_already_running",
     "upload_data_to_storage_task",
     "create_external_storage_table_task",
-    "save_data_in_bq_table"
+    "save_data_in_bq_table",
+    "send_elections_context_alerts"
 ]
