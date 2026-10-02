@@ -2,7 +2,7 @@
 """
 CIVITAS — Extração e carga no datalake dos dados da Palver (Prefect 3).
 """
-
+import os
 from typing import Literal
 
 from iplanrio.pipelines_utils.env import inject_bd_credentials_task, getenv_or_action
@@ -19,18 +19,24 @@ from pipelines.rj_civitas__palver_eleicoes.tasks import (
     load_to_table_task,
     resolve_start_date_task,
     resolve_incremental_date_task,
-    clean_text_task
+    clean_text_task,
+    get_dd_data
+)
+
+from prefect_rj_civitas import (
+    send_elections_context_alerts
 )
 
 
 @flow(log_prints=True)
 def rj_civitas__palver_eleicoes(
     project_id: str = "rj-civitas",
-    dataset_id: str = "palver_eleicoes",
-    sources: list[Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter", "telegram"]] = ["whatsapp", "news", "press", "radio.medias", "television", "twitter", "telegram"],
+    dataset_id: str = "alerta_contexto_eleicoes",
+    sources: list[Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter", "telegram"]] = ["whatsapp", "news", "telegram"],
+    get_disque_denuncia: bool = True,
     docs_per_page: int = 100,
     incremental: bool = True,
-    start_date: str | None = None,
+    start_date: str | None = "2026-10-01 00:00:00",
     end_date: str | None = None,
     minutes_offset: int = 1440,
     query: str = "(eleição OR eleições) AND ('fraude' OR 'urna fraudada' OR 'sabotagem' OR 'Comando Vermelho' OR CV OR TCP OR 'Terceiro Comando' OR traficante~ OR miliciano~)",
@@ -42,7 +48,9 @@ def rj_civitas__palver_eleicoes(
         "PALVER_USERNAME",
         "PALVER_PASSWORD",
         "REDIS_HOST",
-        "REDIS_PASSWORD"
+        "REDIS_PASSWORD",
+        "SLACK_ALERT_CHANNEL",
+        "SLACK_ALERT_TOKEN"
     )
 ):
     rename_current_flow_run_task(new_name=f"{write_disposition}_{dataset_id}_messages-{mode}")
@@ -64,7 +72,9 @@ def rj_civitas__palver_eleicoes(
     if mode in ("dev", "staging"):
         project_id = f"{project_id}-dev"
 
-    sources_uploaded = []
+    llm_credentials = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    slack_channel = os.getenv("SLACK_ALERT_CHANNEL")
+    slack_token = os.getenv("SLACK_ALERT_TOKEN")
     for source in sources:
         table_id = f"palver_eleicoes_{source.replace('.', '_')}_messages"
 
@@ -100,5 +110,40 @@ def rj_civitas__palver_eleicoes(
             data=data,
             write_disposition=write_disposition
         )
-        sources_uploaded.append(source)
+
+        if source in ("whatsapp", "telegram", "news"):
+            send_elections_context_alerts(
+                source = source,
+                target_project_id=project_id,
+                target_dataset_id=dataset_id,
+                target_table_id=f"alerta_eleicoes_{source}",
+                data=data,
+                llm_model="gemini-2.5-flash",
+                llm_credentials=llm_credentials,
+                slack_api_url="https://slack.com/api/chat.postMessage",
+                slack_bot_token=slack_token,
+                slack_channel_id=slack_channel
+            )
+
+    if not get_disque_denuncia:
+        return
+
+    dd_data = get_dd_data(start_date)
+
+    if not dd_data:
+        log("Não foi retornado nenhum registro do Disque Denúncia")
+        return
+
+    send_elections_context_alerts(
+        source = "disque_denuncia",
+        target_project_id=project_id,
+        target_dataset_id=dataset_id,
+        target_table_id="alerta_eleicoes_disque_denuncia",
+        data=dd_data,
+        llm_model="gemini-2.5-flash",
+        llm_credentials=llm_credentials,
+        slack_api_url="https://slack.com/api/chat.postMessage",
+        slack_bot_token=slack_token,
+        slack_channel_id=slack_channel
+    )
 

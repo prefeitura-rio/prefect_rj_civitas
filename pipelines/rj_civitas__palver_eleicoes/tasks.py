@@ -225,3 +225,88 @@ def load_to_table_task(
             insert_timestamp_field="timestamp_insercao"
         )
     log(f"{len(data)} occurrences written to {project_id}.{dataset_id}.{table_id}")
+
+
+@task
+def get_dd_data(start_date: str):
+    client = bigquery.Client()
+    query_last_date = "SELECT MAX(data_denuncia) as ultima_data FROM `rj-civitas-dev.alerta_contexto_eleicoes.alerta_eleicoes_disque_denuncia`"
+    last_date = start_date
+    try:
+        last_date_query_job = client.query(query_last_date)
+        last_date_result = last_date_query_job.result()
+
+        row = next(last_date_result, None)
+
+        if row and row.ultima_data:
+            last_date = row.ultima_data.strftime("%Y-%m-%d %H:%M:%S")
+            log(f"Data de início do Disque Denúncia incremental: {last_date}")
+
+        else:
+            log(
+                f"Não foi possível encontrar a data do último registro do "
+                f"Disque Denúncia. Usando start_date: {start_date}."
+            )
+
+    except Exception as e:
+        log(
+            f"Não foi possível encontrar a data do último registro do "
+            f"Disque Denúncia. Usando start_date: {start_date}. Erro: {e}"
+        )
+
+    query_data = f"""
+SELECT
+    id_denuncia,
+    numero_denuncia,
+    TIMESTAMP(data_denuncia) AS data_denuncia,
+    relato,
+    tipo_logradouro,
+    logradouro,
+    numero_logradouro,
+    complemento_logradouro,
+    referencia_logradouro,
+    municipio,
+    bairro_logradouro,
+    estado,
+    latitude,
+    longitude,
+    ARRAY_TO_STRING(
+      ARRAY(
+        SELECT CONCAT(
+          COALESCE(assunto.classe, ''), ': ', COALESCE(tipo.tipo, ''),
+          IF(tipo.assunto_principal = 1, ' (principal)', '')
+        )
+        FROM UNNEST(assuntos) AS assunto, UNNEST(assunto.tipos) AS tipo
+      ),
+      ' | '
+    ) AS assuntos_tipos
+  FROM `rj-civitas.disque_denuncia.denuncias`
+  WHERE data_denuncia > '{last_date}'
+    AND relato IS NOT NULL
+"""
+
+    try:
+        data_query_job = client.query(query_data)
+        data_result = data_query_job.result()
+
+        data = []
+
+        for row in data_result:
+            item = dict(row)
+
+            if item.get("data_denuncia"):
+                item["data_denuncia"] = item["data_denuncia"].strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+
+            data.append(item)
+        log(f"Foram retornados {len(data)} registros do Disque Denúncia")
+
+
+        return data
+
+    except Exception as e:
+        log(
+            f"Erro ao consultar dados do Disque Denúncia. Erro: {e}"
+        )
+        return None
