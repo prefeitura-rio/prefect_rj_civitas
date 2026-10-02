@@ -1,0 +1,256 @@
+# -*- coding: utf-8 -*-
+"""
+Tasks da pipeline Palver.
+"""
+import asyncio
+from datetime import datetime, timedelta, UTC
+from typing import Any, Dict, List, Literal
+import pytz
+from zoneinfo import ZoneInfo
+import os
+
+import re
+from google import genai
+from google.oauth2 import service_account
+from google.cloud import bigquery
+from iplanrio.pipelines_utils.env import getenv_or_action
+from iplanrio.pipelines_utils.logging import log
+from prefect import task
+from prefect_rj_civitas import (
+    save_data_in_bq_table
+)
+from pipelines.rj_civitas__palver_eleicoes.utils import (
+    is_token_valid,
+    get_on_redis,
+    auth,
+    update_token_on_redis,
+    get_data,
+    llm_extract_informations_from_text
+)
+from pipelines.rj_civitas__palver_eleicoes.schemas import get_source_schema
+
+tz = pytz.timezone("America/Sao_Paulo")
+
+@task
+def resolve_incremental_date_task(
+    project_id: str,
+    dataset_id: str,
+    table_id: str
+    ):
+    log(f"Getting the last charge datetime from {table_id}")
+    try:
+        table_full_name = f"{project_id}.{dataset_id}.{table_id}"
+
+        client = bigquery.Client(project=project_id)
+
+        query = f"""
+            SELECT MAX(datetime) AS max_value
+            FROM `{table_full_name}`
+        """
+
+        query_job = client.query(query)
+        result = query_job.result()
+
+        row = next(result)
+        if row.max_value is None:
+            return None
+
+        ts_utc = row.max_value.astimezone(UTC) + timedelta(seconds=1)
+        resolved_start_date = ts_utc.isoformat().replace("+00:00", "Z")
+        log(f"Start date redefined to: {resolved_start_date}")
+        return resolved_start_date
+    except Exception as e:
+        log(f"Error while searching for last charge datetime. Using start date predefined.\nDetails: {e}")
+        return None
+
+
+@task
+def resolve_start_date_task(start_date: str | None, minutes_offset: int) -> str:
+    """
+    Resolves the start_date used for the API call.
+
+    If `start_date` is provided, returns it unchanged. Otherwise, computes
+    `(now in America/Sao_Paulo - minutes_offset minutes)` formatted as `YYYY-MM-DDTHH:`.
+
+    This is evaluated at flow run time so the schedule does not need to
+    embed a concrete date.
+    """
+    if start_date:
+        try:
+            dt = datetime.strptime(start_date, "%Y-%m-%d %H:%M:%S")
+            dt = dt.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
+
+            start_date = dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ")
+            return start_date
+        except ValueError as e:
+            log(f"Value Error: start_date is in the wrong format. Expected: YYYY-MM-DD HH:mm:ss.")
+            raise e
+
+    resolved = (datetime.now(tz=UTC) - timedelta(minutes=minutes_offset)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    log(f"Resolved start_date dynamically: {resolved}", level="info")
+    return resolved
+
+@task
+def get_palver_token_task(
+    palver_email: str,
+    palver_password: str,
+    redis_password:  str | None = None
+    ) -> str:
+    """Returns a valid auth token, using cache when possible."""
+    try:
+        token_data = get_on_redis(
+            dataset_id="palver",
+            name="api_token",
+            redis_password=redis_password,
+        )
+
+        if is_token_valid(token_data):
+            log("Using cached token", level="info")
+            return token_data["token"]
+
+        log("Token expired or invalid. Requesting new token...", level="info")
+    except Exception as e:
+        log(f"Error accessing Redis: {e}\nRequesting new token...", level="warning")
+
+    try:
+        response = auth(palver_email, palver_password)
+        log("Token obtained successfully", level="info")
+    except Exception as e:
+        log(f"Error obtaining valid token: {e}", level="error")
+        raise
+
+    try:
+        update_token_on_redis(response, redis_password=redis_password)
+        log("Token updated in Redis", level="info")
+    except Exception as e:
+        log(f"Failed to update token in Redis: {e}", level="warning")
+
+    return response.json().get("token")
+
+
+@task(retries=5, retry_delay_seconds=30)
+def fetch_messages_task(
+    start_date: str,
+    end_date: str | None,
+    docs_per_page: int,
+    source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter", "telegram"],
+    query: str,
+    palver_token: str
+) -> List[Dict[str, Any]]:
+    """
+    Task that fetches messages from the Palver API.
+
+    Reads `PALVER_BASE_URL`, `PALVER_TOKEN`
+    from environment variables.
+    """
+    host = getenv_or_action("PALVER_BASE_URL", action="raise")
+
+    if end_date:
+        try:
+            dt = datetime.strptime(end_date, "%Y-%m-%d %H:%M:%S")
+            dt = dt.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
+
+            end_date = dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ")
+        except ValueError as e:
+            log(f"Value Error: end_date is in the wrong format. Expected: YYYY-MM-DD HH:mm:ss")
+            raise e
+
+    else:
+        if source=="press":
+            # The Press source truncates timestamps to the day. Set the end date to the end
+            # of yesterday (UTC-3) to prevent today's data from being skipped by the incremental logic.
+            end_date = datetime.now(tz=UTC).strftime("%Y-%m-%dT02:59:59Z")
+        else:
+            end_date = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    log(f"Fetching data from {source}\nStart Date: {start_date}\nEnd date: {end_date}", level="info")
+    data = asyncio.run(
+        get_data(
+            host=host,
+            token=palver_token,
+            source=source,
+            start_date=start_date,
+            end_date=end_date,
+            query=query,
+            docs_per_page=docs_per_page
+        )
+    )
+
+    log(f"Data from {source} fetched successfully.", level="info")
+    return data
+
+
+@task
+def clean_text_task(
+    data: List[Dict[str, Any]],
+    source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter", "telegram"]
+) -> List[Dict[str, Any]]:
+    if source in ("radio.medias", "whatsapp", "television", "twitter", "telegram"):
+        log("Cleaning transcription texts")
+        for doc in data:
+            if doc.get("transcript", ""):
+                cleaned_text  = re.sub(r'\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}|\n\d+\n|^\d+\n', '', doc["transcript"])
+                doc["transcript"] = cleaned_text
+        log("Transcriptions successfully cleaned")
+
+    return data
+
+
+@task(retries=2, retry_delay_seconds=60)
+def llm_enrich_task(
+    model: str,
+    data: List[Dict[str, Any]],
+    source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter", "telegram"],
+) -> List[Dict[str, Any]]:
+    credentials = service_account.Credentials.from_service_account_file(
+        os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+
+    client = genai.Client(
+        vertexai=True,
+        project=credentials.project_id,
+        location="us-central1",
+        credentials=credentials
+    )
+
+    results = asyncio.run(
+        llm_extract_informations_from_text(client, model, source, data)
+    )
+
+    return results
+
+
+@task(retries=5, retry_delay_seconds=30)
+def load_to_table_task(
+    project_id: str,
+    dataset_id: str,
+    table_id: str,
+    source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter", "telegram"],
+    data: List[Dict[str, Any]],
+    write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"] = "WRITE_APPEND"
+) -> None:
+    """
+    Loads occurrences to a BigQuery table using the canonical schema.
+
+    In `dev`/`staging` mode the destination project is suffixed with `-dev`.
+    """
+    log(f"Writing occurrences to {project_id}.{dataset_id}.{table_id}")
+
+    schema = get_source_schema(source)
+    partition_field = "c_processed_at" if source=="press" else "datetime"
+    save_data_in_bq_table(
+            project_id=project_id,
+            dataset_id=dataset_id,
+            table_id=table_id,
+            schema=schema,
+            data=data,
+            write_disposition=write_disposition,
+            partition_field=partition_field,
+            partition_granularity="MONTH",
+            clustering_fields=["id"],
+            ignore_unknown_values=True,
+            allow_field_addition=True,
+            insert_timestamp_field="timestamp_insercao"
+        )
+    log(f"{len(data)} occurrences written to {project_id}.{dataset_id}.{table_id}")
