@@ -7,11 +7,8 @@ from datetime import datetime, timedelta, UTC
 from typing import Any, Dict, List, Literal
 import pytz
 from zoneinfo import ZoneInfo
-import os
 
 import re
-from google import genai
-from google.oauth2 import service_account
 from google.cloud import bigquery
 from iplanrio.pipelines_utils.env import getenv_or_action
 from iplanrio.pipelines_utils.logging import log
@@ -24,8 +21,7 @@ from pipelines.rj_civitas__palver_eleicoes.utils import (
     get_on_redis,
     auth,
     update_token_on_redis,
-    get_data,
-    llm_extract_informations_from_text
+    get_data
 )
 from pipelines.rj_civitas__palver_eleicoes.schemas import get_source_schema
 
@@ -194,31 +190,6 @@ def clean_text_task(
         log("Transcriptions successfully cleaned")
 
     return data
-
-
-@task(retries=2, retry_delay_seconds=60)
-def llm_enrich_task(
-    model: str,
-    data: List[Dict[str, Any]],
-    source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter", "telegram"],
-) -> List[Dict[str, Any]]:
-    credentials = service_account.Credentials.from_service_account_file(
-        os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
-        scopes=["https://www.googleapis.com/auth/cloud-platform"],
-    )
-
-    client = genai.Client(
-        vertexai=True,
-        project=credentials.project_id,
-        location="us-central1",
-        credentials=credentials
-    )
-
-    results = asyncio.run(
-        llm_extract_informations_from_text(client, model, source, data)
-    )
-
-    return results
 
 
 @task(retries=5, retry_delay_seconds=30)

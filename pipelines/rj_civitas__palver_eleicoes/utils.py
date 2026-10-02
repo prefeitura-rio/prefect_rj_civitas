@@ -5,7 +5,6 @@ Helpers para a pipeline Palver.
 Inclui fetch assíncrono de ocorrências e escrita em BigQuery.
 """
 import asyncio
-import random
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Literal, Optional
 
@@ -15,12 +14,8 @@ import pytz
 import requests
 import urllib3
 from redis_pal import RedisPal
-from google import genai
-from google.genai import types
 from iplanrio.pipelines_utils.env import getenv_or_action
 from iplanrio.pipelines_utils.logging import log, log_mod
-
-from pipelines.rj_civitas__palver_eleicoes.schemas import get_source_text_fields, LLMGeoSchema
 
 tz = pytz.timezone("America/Sao_Paulo")
 
@@ -260,80 +255,3 @@ async def get_data(
             level="info",
         )
         return docs
-
-
-async def llm_extract_single_text(
-        semaphore: asyncio.Semaphore,
-        client: genai.Client,
-        model: str,
-        source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter", "telegram"],
-        text: str,
-        doc: Dict[str, Any]) -> Dict[str, Any]:
-    """Função assíncrona que analisa a relevância do texto"""
-    text_type = "o post de rede social" if source in ("whatsapp", "twitter", "telegram") else "a notícia"
-    prompt = f"Analise {text_type} abaixo. Extraia as informações exigidas estritamente de acordo com o esquema JSON fornecido.\n\nTexto:\n{text}"
-
-    config = types.GenerateContentConfig(
-        response_mime_type="application/json",
-        response_schema=LLMGeoSchema.model_json_schema(),
-        temperature=0.1
-    )
-    async with semaphore:
-        for attempt in range(3):
-            try:
-                response = await client.aio.models.generate_content(
-                    model=model,
-                    contents=prompt,
-                    config=config,
-                )
-                result = LLMGeoSchema.model_validate_json(response.text)
-                if result:
-                    doc["sensacionalista"] = result.sensacionalista
-                    doc["ataque_urnas"] = result.ataque_urnas
-                    doc["difamacao"] = result.difamacao
-                return doc
-
-            except Exception as e:
-                log(f"Error while processing text (attempt {attempt + 1}/3): {e}")
-
-                # Retry apenas em caso de 429
-                if "429" in str(e):
-                    if attempt < 2:
-                        wait_time = 2 ** (attempt + 1) + random.uniform(0, 1)
-                        await asyncio.sleep(wait_time)
-                        continue
-
-                return doc
-
-        return doc
-
-
-async def llm_extract_informations_from_text(
-        client: genai.Client,
-        model: str,
-        source: Literal["whatsapp", "news", "press", "radio.medias", "television", "twitter", "telegram"],
-        data: List[Dict[str, Any]]):
-    """Envelopa a chamada da API usando o semáforo para limitar acessos simultâneos"""
-    print(f"Starting LLM information data extraction of  {len(data)} texts from {source}...")
-    semaphore = asyncio.Semaphore(5)
-
-    text_fields = get_source_text_fields(source)
-    extractions = []
-    for doc in data:
-        lines = []
-        for field in text_fields:
-            value = doc.get(field, "")
-            if value:
-                lines.append(value)
-
-        text = "\n\n".join(lines)
-
-        if not text:
-            extractions.append(asyncio.sleep(0, result=doc))
-            continue
-
-        task = llm_extract_single_text(semaphore, client, model, source, text, doc)
-        extractions.append(task)
-
-    results = await asyncio.gather(*extractions)
-    return results

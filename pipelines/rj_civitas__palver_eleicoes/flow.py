@@ -3,7 +3,6 @@
 CIVITAS — Extração e carga no datalake dos dados da Palver (Prefect 3).
 """
 
-from os import environ
 from typing import Literal
 
 from iplanrio.pipelines_utils.env import inject_bd_credentials_task, getenv_or_action
@@ -20,8 +19,7 @@ from pipelines.rj_civitas__palver_eleicoes.tasks import (
     load_to_table_task,
     resolve_start_date_task,
     resolve_incremental_date_task,
-    clean_text_task,
-    llm_enrich_task
+    clean_text_task
 )
 
 
@@ -93,8 +91,6 @@ def rj_civitas__palver_eleicoes(
             continue
 
         data = clean_text_task(source=source, data=data)
-
-        data = llm_enrich_task(source=source, data=data, model=llm_model)
 
         load_to_table_task(
             project_id=project_id,
