@@ -52,3 +52,6 @@ deployments:
       anchor_date: "2026-10-01T00:03:00" # Data de inicio do schedule em UTC
       timezone: America/Sao_Paulo
       slug: palver_eleicoes_every_five_minutes
+      parameters:
+        mode: prod
+        start_date: "2026-10-02 18:00:00"
