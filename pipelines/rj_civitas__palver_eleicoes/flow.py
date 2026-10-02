@@ -128,7 +128,8 @@ def rj_civitas__palver_eleicoes(
     if not get_disque_denuncia:
         return
 
-    dd_data = get_dd_data(start_date)
+    target_dd_table = "alerta_eleicoes_disque_denuncia"
+    dd_data = get_dd_data(project_id, target_dd_table, start_date)
 
     if not dd_data:
         log("Não foi retornado nenhum registro do Disque Denúncia")
@@ -138,7 +139,7 @@ def rj_civitas__palver_eleicoes(
         source = "disque_denuncia",
         target_project_id=project_id,
         target_dataset_id=dataset_id,
-        target_table_id="alerta_eleicoes_disque_denuncia",
+        target_table_id=target_dd_table,
         data=dd_data,
         llm_model="gemini-2.5-flash",
         llm_credentials=llm_credentials,
