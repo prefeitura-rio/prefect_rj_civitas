@@ -191,6 +191,46 @@ def clean_text_task(
 
     return data
 
+@task
+def filter_existent_data(
+    project_id: str,
+    dataset_id: str,
+    table_id: str,
+    source: str,
+    data: List[Dict[str,Any]]
+) -> List[Dict[str,Any]]:
+    log("Filtrando dados existentes...", level="info")
+    client = bigquery.Client()
+    query_data = f"""
+    SELECT DISTINCT
+        text {', transcript' if source != "news" else ''}
+      FROM `{project_id}.{dataset_id}.{table_id}`
+      WHERE COALESCE(text, '') != ''
+    """
+
+    try:
+        data_query_job = client.query(query_data)
+        data_result = data_query_job.result()
+
+        existing_texts = set()
+        existing_transcripts = set()
+        for row in data_result:
+            item = dict(row)
+            if item.get("text"):
+                existing_texts.add(item.get("text"))
+            if item.get("transcript"):
+                existing_transcripts.add(item.get("transcript"))
+
+        filtered_data = [row for row in data if row.get("text") not in existing_texts and row.get("transcript") not in existing_transcripts]
+        log(f"Foram encontrados {len(filtered_data)} novos registros de {source}")
+        return filtered_data
+
+    except Exception as e:
+        log(
+            f"Erro ao consultar dados existentes. Os dados e alertas ficarão duplicados caso já existam. Erro: {e}"
+        )
+        return data
+
 
 @task(retries=5, retry_delay_seconds=30)
 def load_to_table_task(
