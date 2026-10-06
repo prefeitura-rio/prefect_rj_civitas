@@ -368,7 +368,7 @@ def enrich_with_gabriel_images(
         bucket=bucket,
         logger=logger
         )
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         list( executor.map(fixed_params, readings) )  # Apenas executa sem retornar nada, os objetos são alterados na função
     return
 

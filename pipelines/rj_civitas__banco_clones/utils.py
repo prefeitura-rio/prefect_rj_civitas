@@ -3,6 +3,7 @@ from iplanrio.pipelines_utils.logging import log
 from datetime import datetime
 from google.cloud import storage
 from typing import Literal, Optional
+from time import sleep
 import numpy as np
 import requests
 
@@ -29,7 +30,7 @@ def get_gabriel_full_image_link(
         response = requests.get(
             url=url,
             headers={"Authorization": f"Bearer {token}"},
-            timeout=(5,30),
+            timeout=(5,60),
         )
         response.raise_for_status()
 
@@ -43,41 +44,71 @@ def get_gabriel_full_image_link(
 
         return image_url
 
-    try:
-        image_url = request_image(gabriel_token.get())
-        return image_url
-
-    except requests.HTTPError as error:
-        if error.response is None or error.response.status_code != 401:
-            logger.warning(
-                f"Error while getting Gabriel image link of event {id_evento}: {error}"
-            )
-            return None
-
-        # Token expired/invalid: force refresh and retry once
-        token = gabriel_token.refresh()
-        if not token:
-            logger.warning(
-                f"Error while retrying Gabriel image link request of event "
-                f"{id_evento}: failed to refresh API token"
-            )
-            return None
-
+    retries = 3
+    for attempt in range(retries):
         try:
-            image_url = request_image(token)
+            image_url = request_image(gabriel_token.get())
             return image_url
 
-        except (requests.RequestException, ValueError) as retry_error:
+        except (requests.Timeout, requests.ConnectionError) as error:
+            if attempt == retries - 1:
+                logger.warning(
+                    f"Timeout or connection error while getting Gabriel image link of event "
+                    f"{id_evento}. All attempts failed: {error}"
+                )
+                return None
+
+            logger.info(
+                f"Timeout or connection error while getting Gabriel image link of event "
+                f"{id_evento}. Attempt {attempt + 1}/{retries}: {error}"
+            )
+            sleep(3 ** attempt)
+            continue
+
+        except requests.HTTPError as error:
+            status_code = error.response.status_code if error.response else None
+            if status_code in (429, 408):
+                if attempt == retries - 1:
+                    logger.warning(
+                        f"HTTP {status_code} while getting Gabriel image link "
+                        f"of event {id_evento}. All attempts failed: {error}"
+                    )
+                    return None
+
+                logger.info(
+                    f"HTTP {status_code} while getting Gabriel image link "
+                    f"of event {id_evento}. Attempt {attempt + 1}/{retries}"
+                )
+                sleep(3 ** attempt)
+                continue
+
+            if status_code != 401:
+                logger.warning(
+                    f"Error while getting Gabriel image link of event {id_evento}: {error}"
+                )
+                return None
+
+            # Token expired/invalid: force refresh and retry once
+            token = gabriel_token.refresh()
+            if not token:
+                logger.warning(
+                    f"Error while getting Gabriel image link request of event "
+                    f"{id_evento}: failed to refresh API token"
+                )
+                return None
+
             logger.warning(
-                f"Error while retrying Gabriel image link request of event {id_evento}: {retry_error}"
+                f"Token was invalid and refreshed. Trying again: "
+                f"Attempt {attempt + 1}/{retries}"
+            )
+            continue
+
+        except (requests.RequestException, ValueError) as error:
+            logger.warning(
+                f"Error while getting Gabriel image link of event {id_evento}: "
+                f"type={type(error)}, error={error}"
             )
             return None
-
-    except (requests.RequestException, ValueError) as error:
-        logger.warning(
-            f"Error while getting Gabriel image link of event {id_evento}: {error}"
-        )
-        return None
 
 
 def get_storage_link_if_exists(
