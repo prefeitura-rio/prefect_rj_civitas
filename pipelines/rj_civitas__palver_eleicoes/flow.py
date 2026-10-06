@@ -20,6 +20,7 @@ from pipelines.rj_civitas__palver_eleicoes.tasks import (
     resolve_start_date_task,
     resolve_incremental_date_task,
     clean_text_task,
+    filter_existent_data,
     get_dd_data
 )
 
@@ -101,6 +102,8 @@ def rj_civitas__palver_eleicoes(
             continue
 
         data = clean_text_task(source=source, data=data)
+
+        data = filter_existent_data(project_id, dataset_id, table_id, source, data)
 
         load_to_table_task(
             project_id=project_id,
