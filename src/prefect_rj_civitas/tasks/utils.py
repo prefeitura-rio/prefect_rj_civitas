@@ -25,7 +25,8 @@ def save_data_in_bq_table(
         clustering_fields: list[str] | None = None,
         partition_field: str | None = None,
         partition_granularity: Literal["HOUR", "DAY", "MONTH", "YEAR"] = "MONTH",
-        max_bad_records: int = 0
+        max_bad_records: int = 0,
+        table_description: str | None = None
 ) -> None:
     table_full_name = f"{project_id}.{dataset_id}.{table_id}"
     client = bigquery.Client(project=project_id)
@@ -63,5 +64,11 @@ def save_data_in_bq_table(
     try:
         job = client.load_table_from_json(data, table_full_name, job_config=job_config)
         job.result()
+
+        if table_description is not None:
+            table = client.get_table(table_full_name)
+            table.description = table_description
+            client.update_table(table, ["description"])
+
     except Exception as e:
         raise Exception(e)
