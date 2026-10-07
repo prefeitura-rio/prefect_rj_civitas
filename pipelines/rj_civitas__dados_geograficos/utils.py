@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import shapely
+import geopandas as gdp
 from shapely import force_2d
 from shapely.geometry import MultiPolygon
 from shapely.validation import make_valid
@@ -34,3 +35,15 @@ def corrigir_geometria(geom):
         # Qualquer falha ou erro matemático retorna None imediatamente
         log(f"Falha na geração de geometria: {e}", level="warning")
         return None
+
+def format_isp_data(type: str, name_field: str, data: list[dict]):
+    print("Limpando e formatando dados...")
+    gdf = gdp.GeoDataFrame.from_features(data["features"])
+    gdf["geometry"] = gdf["geometry"].apply(force_2d)
+    gdf["geometry"] = gdf["geometry"].apply(make_valid)
+    gdf["geometry"] = gdf["geometry"].simplify(tolerance=0.000001, preserve_topology=True)
+    gdf["geometria"] = gdf.geometry.to_wkt()
+
+    gdf = gdf[[type.lower(), name_field, "geometria"]]
+
+    return gdf.to_dict(orient="records")
