@@ -19,7 +19,7 @@ def fetch_cameras_task(
     }
     log(f"Fetching data from TIXXI", level="info")
     try:
-        response = httpx.post(url=tixxi_url, json=body)
+        response = httpx.post(url=tixxi_url, json=body, verify=False)
         response.raise_for_status()
         data = response.json()["cameras"]
         cameras = [{
