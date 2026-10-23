@@ -96,19 +96,19 @@ deployments:
       #       prod: "rj-civitas_dbt"
       #       dev: "rj-civitas-dev_dbt"
 
-      # # Hourly (3600 seconds = 1 hour)
-      # # Schedule 4: run each 60 minutes
-      # - interval: 3600
-      #   anchor_date: "2024-03-17T09:15:00"
-      #   timezone: America/Sao_Paulo
-      #   slug: dbt_hourly_build
-      #   parameters:
-      #     command: "build"
-      #     select: "+tag:hourly"
-      #     send_discord_report: true
-      #     github_repo: "https://github.com/prefeitura-rio/pipelines_rj_civitas.git"
-      #     bigquery_project: "rj-civitas"
-      #     target: "prod"
-      #     gcs_buckets:
-      #       prod: "rj-civitas_dbt"
-      #       dev: "rj-civitas-dev_dbt"
+      # Hourly (3600 seconds = 1 hour)
+      # Schedule 4: run each 60 minutes
+      - interval: 3600
+        anchor_date: "2024-03-17T09:15:00-03:00"
+        timezone: America/Sao_Paulo
+        slug: dbt_hourly_build
+        parameters:
+          command: "build"
+          select: "tag:hourly"
+          send_discord_report: true
+          github_repo: "https://github.com/prefeitura-rio/pipelines_rj_civitas.git"
+          bigquery_project: "rj-civitas"
+          target: "dev"
+          gcs_buckets:
+            prod: "rj-civitas_dbt"
+            dev: "rj-civitas-dev_dbt"
