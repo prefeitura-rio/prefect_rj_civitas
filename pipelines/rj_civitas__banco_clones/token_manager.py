@@ -6,14 +6,20 @@ import threading
 import time
 
 from typing import Optional
-from iplanrio.pipelines_utils.logging import log
 
 
 class TokenManager():
-    def __init__(self, api_url: str, api_client_id: str, api_client_secret: str):
+    def __init__(
+        self,
+        api_url: str,
+        api_client_id: str,
+        api_client_secret: str,
+        logger
+    ):
         self._api_url = api_url
         self._api_client_id = api_client_id
         self._api_client_secret = api_client_secret
+        self._logger = logger
         self._lock = threading.Lock()
         self.api_token: Optional[str] = None
         self._expires_at: float = 0.0
@@ -52,7 +58,10 @@ class TokenManager():
                 data = response.json()
                 token = data.get("access_token")
                 if not token:
-                    log(f"Error while getting Gabriel API access token: access_token field is missing or empty", level="warning")
+                    self._logger.warning(
+                        "Error while getting Gabriel API access token: "
+                        "access_token field is missing or empty"
+                    )
                     return None
 
                 self.api_token = token
@@ -60,7 +69,9 @@ class TokenManager():
                 return token
 
             except (requests.RequestException, ValueError) as error:
-                log(f"Error while getting Gabriel API access token: {error}", level="warning")
+                self._logger.warning(
+                    f"Error while getting Gabriel API access token: {error}"
+                )
                 return None
 
     def get(self) -> Optional[str]:

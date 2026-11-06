@@ -6,6 +6,7 @@ from google.cloud import bigquery, storage
 from itertools import chain
 from iplanrio.pipelines_utils.logging import log
 from prefect import task
+from prefect.logging import get_run_logger
 from typing import Any, Dict, List, Literal
 
 from prefect_rj_civitas import (
@@ -83,7 +84,13 @@ def get_tracks_task(
     log("Separating tracks...")
     tracks_data = []
     if get_gabriel_images:
-        gabriel_api_token = TokenManager(gabriel_api_url, gabriel_api_client_id, gabriel_api_client_secret)
+        logger = get_run_logger()
+        gabriel_api_token = TokenManager(
+            gabriel_api_url,
+            gabriel_api_client_id,
+            gabriel_api_client_secret,
+            logger=logger
+        )
         storage_client = storage.Client()
         bucket = storage_client.bucket(gabriel_images_bucket)
 

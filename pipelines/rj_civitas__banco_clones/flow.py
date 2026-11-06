@@ -24,7 +24,7 @@ def rj_civitas__banco_clones(
     project_id: str = "rj-civitas",
     clones_dataset_id: str = "banco_clones",
     readings_dataset_id: str = "cerco_digital",
-    readings_table_id: str = "teste_integracao_gabriel",
+    readings_table_id: str = "vw_all_readings",
     banco_clones_table_id: str = "banco_clones_dia",
     pares_suspeitos_table_id: str = "pares_suspeitos",
     trilhas_table_id: str = "trilhas_clones_dia",
