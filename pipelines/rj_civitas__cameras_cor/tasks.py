@@ -27,7 +27,7 @@ def fetch_cameras_task(
                 "name": camera["name"],
                 "latitude": camera["latitude"],
                 "longitude": camera["longitude"],
-                "status": camera["CameraStatus"]
+                "status_code": camera["CameraStatus"]
             } for camera in data]
         log("Data obtained successfully.", level="info")
         return cameras
@@ -35,3 +35,22 @@ def fetch_cameras_task(
     except Exception as e:
         log(f"Error obtaining data: {e}", level="error")
         raise
+
+
+@task
+def enrich_data_task(
+    data: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    status_map = {
+        "0": "OFFLINE",
+        "1": "ONLINE",
+        "3": "DESLIGADA",
+        "5": "TERCEIROS"
+    }
+    enriched_data = [
+        {
+            **register,
+            "status_description": status_map.get(register.get("status_code")),
+            "is_third_party": register.get("status_code") == '5'
+            } for register in data]
+    return enriched_data
