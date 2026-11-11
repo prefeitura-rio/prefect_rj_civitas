@@ -42,8 +42,8 @@ def enrich_data_task(
     data: List[Dict[str, Any]]
 ) -> List[Dict[str, Any]]:
     status_map = {
-        "0": "OFFLINE",
-        "1": "ONLINE",
+        "0": "ONLINE",
+        "1": "OFFLINE",
         "3": "DESLIGADA",
         "5": "TERCEIROS"
     }
