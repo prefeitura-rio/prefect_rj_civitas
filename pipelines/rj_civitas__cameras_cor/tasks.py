@@ -23,10 +23,11 @@ def fetch_cameras_task(
         response.raise_for_status()
         data = response.json()["cameras"]
         cameras = [{
-                "CameraCode": camera["code"],
-                "CameraName": camera["name"],
-                "Latitude": camera["latitude"],
-                "Longitude": camera["longitude"]
+                "code": camera["code"],
+                "name": camera["name"],
+                "latitude": camera["latitude"],
+                "longitude": camera["longitude"],
+                "status": camera["CameraStatus"]
             } for camera in data]
         log("Data obtained successfully.", level="info")
         return cameras

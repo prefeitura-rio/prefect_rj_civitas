@@ -76,35 +76,42 @@ def rj_civitas__cameras_cor(
             name="Skipped",
         )
 
-    column_names = ["CameraCode",
-                    "CameraName",
-                    "Latitude",
-                    "Longitude"
+    column_names = ["code",
+                    "name",
+                    "latitude",
+                    "longitude",
+                    "status"
     ]
     bq_schema = [
         bigquery.SchemaField(
-            name="CameraCode",
+            name="code",
             field_type="STRING",
             mode="REQUIRED",
             description="Código da câmera"
             ),
         bigquery.SchemaField(
-            name="CameraName",
+            name="name",
             field_type="STRING",
             mode="NULLABLE",
             description="Nome da câmera"
             ),
         bigquery.SchemaField(
-            name="Latitude",
+            name="latitude",
             field_type="STRING",
             mode="NULLABLE",
             description="Latitude da câmera"
             ),
         bigquery.SchemaField(
-            name="Longitude",
+            name="longitude",
             field_type="STRING",
             mode="NULLABLE",
             description="Longitude da câmera"
+            ),
+        bigquery.SchemaField(
+            name="status",
+            field_type="STRING",
+            mode="NULLABLE",
+            description="Status da câmera (0: OFFLINE | 1: ONLINE | 3: DESLIGADA | 5: TERCEIROS)"
             )
     ]
     table_description = "Dados brutos das câmeras da Tixxi extraídos diretamente da API"
