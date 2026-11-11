@@ -24,7 +24,8 @@ from constants import (
     PROPORCAO_PLACAS_CONFUNDIVEIS_PROXIMAS,
     PROPORCAO_PRINCIPAL_PLACA_CONFUNDIVEL,
     INTERVALO_HORAS_MAXIMO_PLACA_CONFUNDIVEL,
-    DISTANCIA_KM_MAXIMA_PLACA_CONFUNDIVEL
+    DISTANCIA_KM_MAXIMA_PLACA_CONFUNDIVEL,
+    DETECCOES_INDEPENDENTES_MINIMAS_PLACA_CONFUNDIVEL
 )
 
 from token_manager import TokenManager
@@ -501,36 +502,50 @@ def get_possible_reading_error_plate(
         trilha: list[dict],
         leituras_placas_similares: list[dict]
         ):
-    total_possible_errors = 0
+    def is_near(reading_a: dict, reading_b: dict) -> bool:
+        hours = intervalo_horas(reading_a, reading_b)
+        if hours == 0 or abs(hours) >= INTERVALO_HORAS_MAXIMO_PLACA_CONFUNDIVEL:
+            return False
+
+        earlier, later = (reading_a, reading_b) if hours > 0 else (reading_b, reading_a)
+        return custo_trecho(earlier, later) < DISTANCIA_KM_MAXIMA_PLACA_CONFUNDIVEL
+
+    # Para cada placa, guarde os índices das detecções da trilha alvo que têm
+    # pelo menos uma leitura próxima dessa placa. Vários pares contam como uma
+    # única detecção coberta.
     similar_plates = {}
-
-    for reading in trilha:
+    all_covered_track_detections = set()
+    for track_index, reading in enumerate(trilha):
         for similar_reading in leituras_placas_similares:
-            if reading["datahora"] < similar_reading["datahora"] and \
-                intervalo_horas(reading, similar_reading) < INTERVALO_HORAS_MAXIMO_PLACA_CONFUNDIVEL and \
-                custo_trecho(reading, similar_reading) < DISTANCIA_KM_MAXIMA_PLACA_CONFUNDIVEL:
-                total_possible_errors += 1
+            if is_near(reading, similar_reading):
                 plate = similar_reading["placa"]
-                if not similar_plates.get(plate):
-                    similar_plates[plate] = 1
-                else:
-                    similar_plates[plate] += 1
+                similar_plates.setdefault(plate, set()).add(track_index)
+                all_covered_track_detections.add(track_index)
 
-            elif reading["datahora"] > similar_reading["datahora"] and \
-                intervalo_horas(similar_reading, reading) < INTERVALO_HORAS_MAXIMO_PLACA_CONFUNDIVEL and \
-                custo_trecho(similar_reading, reading) < DISTANCIA_KM_MAXIMA_PLACA_CONFUNDIVEL:
-                total_possible_errors += 1
-                plate = similar_reading["placa"]
-                if not similar_plates.get(plate):
-                    similar_plates[plate] = 1
-                else:
-                    similar_plates[plate] += 1
+    overall_coverage = len(all_covered_track_detections) / len(trilha)
+    if overall_coverage <= PROPORCAO_PLACAS_CONFUNDIVEIS_PROXIMAS:
+        return None, 0
 
-    if total_possible_errors > 0 and \
-        total_possible_errors/len(trilha) > PROPORCAO_PLACAS_CONFUNDIVEIS_PROXIMAS:
-        plate = max(similar_plates, key=similar_plates.get)
-        proportion = similar_plates[plate]/len(trilha)
-        if proportion > PROPORCAO_PRINCIPAL_PLACA_CONFUNDIVEL:
-            return plate, proportion
+    eligible_plates = []
+    for plate, covered_track_indices in similar_plates.items():
+        coverage = len(covered_track_indices) / len(trilha)
+        if coverage <= PROPORCAO_PRINCIPAL_PLACA_CONFUNDIVEL:
+            continue
 
-    return None, 0
+        plate_readings = [
+            reading for reading in leituras_placas_similares
+            if reading["placa"] == plate
+        ]
+        independent_detections = set()
+        for index, similar_reading in enumerate(plate_readings):
+            if not any(is_near(reading, similar_reading) for reading in trilha):
+                independent_detections.add(index)
+
+        if len(independent_detections) >= DETECCOES_INDEPENDENTES_MINIMAS_PLACA_CONFUNDIVEL:
+            eligible_plates.append((plate, coverage))
+
+    if not eligible_plates:
+        return None, 0
+
+    # Em empate de cobertura, a ordem de inserção preserva a primeira placa vista.
+    return max(eligible_plates, key=lambda item: item[1])
