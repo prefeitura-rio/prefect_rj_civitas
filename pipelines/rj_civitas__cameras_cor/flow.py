@@ -19,7 +19,8 @@ from prefect_rj_civitas import (
 )
 
 from pipelines.rj_civitas__cameras_cor.tasks import (
-    fetch_cameras_task
+    fetch_cameras_task,
+    enrich_data_task
 )
 
 
@@ -76,36 +77,59 @@ def rj_civitas__cameras_cor(
             name="Skipped",
         )
 
-    column_names = ["CameraCode",
-                    "CameraName",
-                    "Latitude",
-                    "Longitude"
+    data = enrich_data_task(data)
+
+    column_names = ["code",
+                    "name",
+                    "latitude",
+                    "longitude",
+                    "status_code",
+                    "status_description",
+                    "is_third_party"
     ]
     bq_schema = [
         bigquery.SchemaField(
-            name="CameraCode",
+            name="code",
             field_type="STRING",
             mode="REQUIRED",
             description="Código da câmera"
             ),
         bigquery.SchemaField(
-            name="CameraName",
+            name="name",
             field_type="STRING",
             mode="NULLABLE",
             description="Nome da câmera"
             ),
         bigquery.SchemaField(
-            name="Latitude",
+            name="latitude",
             field_type="STRING",
             mode="NULLABLE",
             description="Latitude da câmera"
             ),
         bigquery.SchemaField(
-            name="Longitude",
+            name="longitude",
             field_type="STRING",
             mode="NULLABLE",
             description="Longitude da câmera"
-            )
+            ),
+        bigquery.SchemaField(
+            name="status_code",
+            field_type="STRING",
+            mode="NULLABLE",
+            description="Código de status da câmera (0: OFFLINE | 1: ONLINE | 3: DESLIGADA | 5: TERCEIROS)"
+            ),
+        bigquery.SchemaField(
+            name="status_description",
+            field_type="STRING",
+            mode="NULLABLE",
+            description="Descrição de status da câmera"
+            ),
+        bigquery.SchemaField(
+            name="is_third_party",
+            field_type="BOOLEAN",
+            mode="NULLABLE",
+            description="É uma câmera de terceiros"
+            ),
     ]
     table_description = "Dados brutos das câmeras da Tixxi extraídos diretamente da API"
 
