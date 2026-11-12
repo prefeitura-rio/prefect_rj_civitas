@@ -18,6 +18,7 @@ def save_data_in_bq_table(
         project_id: str,
         dataset_id: str,
         table_id: str,
+        table_description: str | None = None,
         write_disposition: str = "WRITE_APPEND",
         allow_field_addition: bool = False,
         ignore_unknown_values: bool = True,
@@ -26,7 +27,6 @@ def save_data_in_bq_table(
         partition_field: str | None = None,
         partition_granularity: Literal["HOUR", "DAY", "MONTH", "YEAR"] = "MONTH",
         max_bad_records: int = 0,
-        table_description: str | None = None
 ) -> None:
     table_full_name = f"{project_id}.{dataset_id}.{table_id}"
     client = bigquery.Client(project=project_id)
