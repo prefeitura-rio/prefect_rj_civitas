@@ -72,7 +72,7 @@ def rj_civitas__cameras_civitas(
             dataset_id=f"{dataset_id}_staging",
             table_id=table_id,
             data=data,
-            write_disposition="WRITE_TRUNCATE"
+            write_disposition="WRITE_APPEND"
         )
 
     if materialize_after_dump:

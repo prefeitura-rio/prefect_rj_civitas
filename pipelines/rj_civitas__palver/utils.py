@@ -130,7 +130,7 @@ def auth(email: str, password: str) -> requests.Response:
     payload = {"email": email, "password": password}
     headers = {"Content-Type": "application/json"}
 
-    response = requests.post(host + endpoint, json=payload, headers=headers, verify=False)
+    response = requests.post(host + endpoint, json=payload, headers=headers, verify=False, timeout=10)
     response.raise_for_status()
     return response
 

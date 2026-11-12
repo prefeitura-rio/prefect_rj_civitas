@@ -146,7 +146,7 @@ def load_to_table_task(
     dataset_id: str,
     table_id: str,
     data: List[Dict[str, Any]],
-    write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"] = "WRITE_TRUNCATE"
+    write_disposition: Literal["WRITE_TRUNCATE", "WRITE_APPEND"] = "WRITE_APPEND"
 ) -> None:
     """
     Loads occurrences to a BigQuery table using the canonical schema.
@@ -206,7 +206,8 @@ def load_to_table_task(
                 data=data,
                 write_disposition=write_disposition,
                 ignore_unknown_values=True,
-                insert_timestamp_field="timestamp_insercao"
+                insert_timestamp_field="timestamp_insercao",
+                partition_field="timestamp_insercao"
             )
 
     log(f"{len(data)} registers written to {project_id}.{dataset_id}.{table_id}")

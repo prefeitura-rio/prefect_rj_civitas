@@ -62,7 +62,7 @@ deployments:
         command: build
         bigquery_project: rj-civitas
         select: "+cerco_digital"
-        exclude: "vw_readings"
+        exclude: "vw_readings dados_veiculos"
         target: dev
         mode: prod
         required_secrets:
